@@ -1,14 +1,12 @@
 package com.gurmeet.coindevta.data.remote.websocket
 
+import android.util.Log
+import com.gurmeet.coindevta.domain.model.TickerUpdate
+import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.buffer
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.conflate
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.WebSocket
-import okhttp3.WebSocketListener
+import kotlinx.coroutines.flow.*
+import okhttp3.*
+import okio.ByteString
 import org.json.JSONArray
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -18,38 +16,117 @@ class BinanceSocketManager @Inject constructor(
     private val client: OkHttpClient
 ) {
 
-    fun observeAllPrices(): Flow<Pair<String, Double>> =
-        callbackFlow {
+    private val scope =
+        CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-            val request = Request.Builder()
-                .url("wss://stream.binance.com:9443/ws/!miniTicker@arr")
-                .build()
+    // --------------------------------------------------
+    // Shared hot flow (single socket for entire app)
+    // --------------------------------------------------
 
-            val listener = object : WebSocketListener() {
+    private val sharedTickerFlow: SharedFlow<TickerUpdate> by lazy {
+        createSocketFlow()
+            .buffer(capacity = 5000)
+            .shareIn(
+                scope = scope,
+                started = SharingStarted.Eagerly,
+                replay = 0
+            )
+    }
 
-                override fun onMessage(
-                    webSocket: WebSocket,
-                    text: String
-                ) {
-                    try {
-                        val jsonArray = JSONArray(text)
+    fun observeAllPrices(): Flow<TickerUpdate> = sharedTickerFlow
 
-                        for (i in 0 until jsonArray.length()) {
-                            val obj = jsonArray.getJSONObject(i)
-                            val symbol = obj.getString("s")
-                            val price = obj.getString("c").toDouble()
+    // --------------------------------------------------
+    // Internal socket creator (auto reconnect)
+    // --------------------------------------------------
 
-                            trySend(symbol to price)
+    private fun createSocketFlow(): Flow<TickerUpdate> =
+        channelFlow {
+
+            while (isActive) {
+
+                Log.d("Socket", "Creating WebSocket connection")
+
+                val request = Request.Builder()
+                    .url("wss://stream.binance.com:9443/ws/!miniTicker@arr")
+                    .build()
+
+                val listener = object : WebSocketListener() {
+
+                    override fun onOpen(
+                        webSocket: WebSocket,
+                        response: Response
+                    ) {
+                        Log.d("Socket", "WebSocket connected")
+                    }
+
+                    override fun onMessage(
+                        webSocket: WebSocket,
+                        text: String
+                    ) {
+
+                        try {
+
+                            val jsonArray = JSONArray(text)
+                            val size = jsonArray.length()
+
+                            for (i in 0 until size) {
+
+                                val obj = jsonArray.getJSONObject(i)
+
+                                val symbol = obj.optString("s")
+
+                                val currentPrice =
+                                    obj.optDouble("c")
+
+                                val openPrice24h =
+                                    obj.optDouble("o")
+
+                                val isPositive =
+                                    currentPrice >= openPrice24h
+
+                                trySend(
+                                    TickerUpdate(
+                                        symbol = symbol,
+                                        currentPrice = currentPrice,
+                                        openPrice24h = openPrice24h,
+                                        isPositive24h = isPositive
+                                    )
+                                )
+                            }
+
+                        } catch (e: Exception) {
+                            Log.e("Socket", "Parse error: ${e.message}")
                         }
-                    } catch (_: Exception) {}
+                    }
+
+                    override fun onFailure(
+                        webSocket: WebSocket,
+                        t: Throwable,
+                        response: Response?
+                    ) {
+                        Log.e("Socket", "WebSocket failure: ${t.message}")
+                        webSocket.close(1000, null)
+                    }
+
+                    override fun onClosed(
+                        webSocket: WebSocket,
+                        code: Int,
+                        reason: String
+                    ) {
+                        Log.d("Socket", "WebSocket closed")
+                    }
                 }
-            }
 
-            val socket = client.newWebSocket(request, listener)
+                val socket = client.newWebSocket(request, listener)
 
-            awaitClose {
-                socket.close(1000, null)
+                awaitClose {
+                    Log.d("Socket", "Closing WebSocket")
+                    socket.close(1000, null)
+                }
+
+                // If socket closes, reconnect after delay
+                Log.d("Socket", "Reconnecting in 3 seconds...")
+                delay(3000)
             }
-        }.buffer(capacity = 1000)
-            .conflate()
+        }
 }

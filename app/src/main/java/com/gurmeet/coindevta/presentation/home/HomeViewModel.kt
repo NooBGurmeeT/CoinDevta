@@ -2,6 +2,7 @@ package com.gurmeet.coindevta.presentation.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.gurmeet.coindevta.domain.model.TickerUpdate
 import com.gurmeet.coindevta.domain.usecase.*
 import com.gurmeet.coindevta.util.Response
 import com.gurmeet.coindevta.util.windowedByTime
@@ -14,8 +15,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 
 @HiltViewModel
@@ -30,11 +29,6 @@ class HomeViewModel @Inject constructor(
     private val widgetSyncManager: WidgetSyncManager
 ) : ViewModel() {
 
-    // 🔥 Live prices separated (NOT part of combine)
-    private val _livePriceMap =
-        MutableStateFlow<Map<String, Double>>(emptyMap())
-    val livePriceMap: StateFlow<Map<String, Double>> = _livePriceMap
-
     private val searchQuery = MutableStateFlow("")
     private val sortType = MutableStateFlow(SortType.MARKET_CAP_DESC)
     private val uiFlags = MutableStateFlow(HomeScreenState())
@@ -45,7 +39,6 @@ class HomeViewModel @Inject constructor(
     private val baseCoinsFlow =
         observeCoinsUseCase()
             .distinctUntilChanged()
-
 
     val state: StateFlow<HomeScreenState> =
         combine(
@@ -105,17 +98,18 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    @OptIn(FlowPreview::class)
     private fun observeLivePrices() {
 
         viewModelScope.launch(Dispatchers.IO) {
 
             val socketUpdates =
-                MutableSharedFlow<Pair<String, Double>>(
+                MutableSharedFlow<TickerUpdate>(
                     extraBufferCapacity = 5000,
                     onBufferOverflow = BufferOverflow.DROP_OLDEST
                 )
 
-            // 1️⃣ Collect raw socket continuously
+            // 1️⃣ Collect raw websocket stream
             launch {
                 observeLivePricesUseCase()
                     .collect { update ->
@@ -125,20 +119,24 @@ class HomeViewModel @Inject constructor(
 
             // 2️⃣ Batch every 1 second
             socketUpdates
-                .buffer()               // avoid backpressure
-                .windowedByTime(1000L)  // custom extension below
+                .buffer()
+                .windowedByTime(1000L)
                 .collect { batch ->
 
                     if (batch.isNotEmpty()) {
 
                         val latestPerSymbol =
-                            batch.groupBy { it.first }
+                            batch
+                                .groupBy { it.symbol }
                                 .mapValues { entry ->
-                                    entry.value.last().second
+                                    entry.value.last()
                                 }
 
-                        _livePriceMap.update { current ->
-                            current + latestPerSymbol
+                        uiFlags.update { currentState ->
+                            currentState.copy(
+                                tickerMap =
+                                    currentState.tickerMap + latestPerSymbol
+                            )
                         }
                     }
                 }
@@ -155,6 +153,7 @@ class HomeViewModel @Inject constructor(
     }
 
     fun onAction(action: HomeAction) {
+
         when (action) {
 
             is HomeAction.ToggleFavorite ->
@@ -163,19 +162,17 @@ class HomeViewModel @Inject constructor(
                     widgetSyncManager.syncFavorites()
                 }
 
-            is HomeAction.PinCoin -> {
+            is HomeAction.PinCoin ->
                 viewModelScope.launch {
                     pinCoinUseCase(action.symbol)
                     _effect.emit(HomeEffect.StartPinnedService)
                 }
-            }
 
-            HomeAction.UnPinCoin -> {
+            HomeAction.UnPinCoin ->
                 viewModelScope.launch {
                     unPinCoinUseCase()
                     _effect.emit(HomeEffect.StopPinnedService)
                 }
-            }
 
             is HomeAction.SearchChanged ->
                 searchQuery.value = action.query
@@ -191,7 +188,10 @@ class HomeViewModel @Inject constructor(
 
             HomeAction.ToggleExpandFavorites ->
                 uiFlags.update {
-                    it.copy(isExpandedFavorites = !it.isExpandedFavorites)
+                    it.copy(
+                        isExpandedFavorites =
+                            !it.isExpandedFavorites
+                    )
                 }
 
             is HomeAction.CoinClick ->
@@ -207,7 +207,11 @@ class HomeViewModel @Inject constructor(
                 }
 
             is HomeAction.FoldableChanged ->
-                uiFlags.update { it.copy(isFoldableExpanded = action.expanded) }
+                uiFlags.update {
+                    it.copy(
+                        isFoldableExpanded = action.expanded
+                    )
+                }
         }
     }
 }

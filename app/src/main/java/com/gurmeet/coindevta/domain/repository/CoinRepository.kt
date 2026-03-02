@@ -1,6 +1,7 @@
 package com.gurmeet.coindevta.domain.repository
 
 import com.gurmeet.coindevta.domain.model.Coin
+import com.gurmeet.coindevta.domain.model.TickerUpdate
 import com.gurmeet.coindevta.util.Response
 import kotlinx.coroutines.flow.Flow
 
@@ -11,7 +12,7 @@ interface CoinRepository {
     fun observeCoins(): Flow<List<Coin>>
 
     // 🔥 Clean streaming API (no Response wrapper)
-    fun observeLivePrices(): Flow<Pair<String, Double>>
+    fun observeLivePrices(): Flow<TickerUpdate>
 
     suspend fun syncPrices(): Response<Unit>
 

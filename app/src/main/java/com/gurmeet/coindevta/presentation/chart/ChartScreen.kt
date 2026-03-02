@@ -60,7 +60,7 @@ class ChartScreenUi {
                     .padding(16.dp)
             ) {
 
-                PriceHeaderCard(symbol, state.livePrice)
+                PriceHeaderCard(symbol, state.livePrice, state.isPositive24h)
 
                 Spacer(modifier = Modifier.height(20.dp))
 
@@ -107,8 +107,15 @@ class ChartScreenUi {
     @Composable
     private fun PriceHeaderCard(
         symbol: String,
-        price: Double
+        price: Double,
+        isPositive24h: Boolean,
     ) {
+
+        val priceColor =
+            if (isPositive24h)
+                Color(0xFF22C55E)
+            else
+                Color(0xFFEF4444)
 
         Card(
             shape = RoundedCornerShape(20.dp),
@@ -130,14 +137,13 @@ class ChartScreenUi {
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "₹ %.2f".format(price),
+                    text = "$ %.4f".format(price),
                     fontSize = 26.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (price > 0)
-                        Color(0xFF2ECC71)
-                    else
-                        Color.Red
+                    color = priceColor
                 )
+
+                Spacer(modifier = Modifier.height(4.dp))
             }
         }
     }

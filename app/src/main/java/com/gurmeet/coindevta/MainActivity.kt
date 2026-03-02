@@ -40,12 +40,10 @@ class MainActivity : ComponentActivity() {
             }
 
             val state by viewModel.state.collectAsState()
-            val livePrices by viewModel.livePriceMap.collectAsState()
 
             CoinDevtaTheme {
                 HomeScreenUi().LayUi(
                     state = state,
-                    livePrices = livePrices,
                     onAction = viewModel::onAction
                 )
             }
@@ -53,27 +51,24 @@ class MainActivity : ComponentActivity() {
 
         observeEffects()
         startWidgetService()
+        startPinnedPriceService()
     }
 
     private fun observeEffects() {
         lifecycleScope.launch {
+
             viewModel.effect.collect { effect ->
+
                 when (effect) {
 
                     is HomeEffect.NavigateToChart -> {
-                        val intent =
-                            Intent(this@MainActivity, ChartActivity::class.java)
-                        intent.putExtra("symbol", effect.symbol)
-                        startActivity(intent)
+                        startChartActivity(effect)
                     }
 
                     HomeEffect.NavigateBack -> finish()
+
                     HomeEffect.StartPinnedService -> {
-                        val intent = Intent(
-                            this@MainActivity,
-                            PinnedPriceService::class.java
-                        )
-                        startForegroundService(intent)
+                        startPinnedPriceService()
                     }
 
                     HomeEffect.StopPinnedService -> {
@@ -88,9 +83,42 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun startChartActivity(effect: HomeEffect.NavigateToChart) {
+        val currentState = viewModel.state.value
+        val ticker =
+            currentState.tickerMap[effect.symbol]
+
+        val latestPrice =
+            ticker?.currentPrice ?: 0.0
+
+        val isPositive =
+            ticker?.isPositive24h ?: true
+
+        val intent = Intent(
+            this@MainActivity,
+            ChartActivity::class.java
+        ).apply {
+
+            putExtra("symbol", effect.symbol)
+            putExtra("latest_price", latestPrice)
+            putExtra("is_positive", isPositive)
+        }
+
+        startActivity(intent)
+    }
+
     @RequiresApi(Build.VERSION_CODES.O)
     private fun startWidgetService() {
         val intent = Intent(this, CoinWidgetService::class.java)
+        startForegroundService(intent)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun startPinnedPriceService(){
+        val intent = Intent(
+            this@MainActivity,
+            PinnedPriceService::class.java
+        )
         startForegroundService(intent)
     }
 }

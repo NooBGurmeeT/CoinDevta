@@ -22,14 +22,31 @@ class ChartViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ChartUiState())
     val uiState: StateFlow<ChartUiState> = _uiState
 
-    private var currentSymbol: String? = null
+    var currentSymbol: String = ""
+    private var initialPrice: Double = 0.0
+    private var initialIsPositive: Boolean = true
 
-    // Called once from Activity
-    fun initialize(symbol: String) {
-        if (currentSymbol != null) return
+    fun setInitialData(
+        symbol: String,
+        latestPrice: Double,
+        isPositive: Boolean
+    ) {
         currentSymbol = symbol
+        initialPrice = latestPrice
+        initialIsPositive = isPositive
 
-        loadChart(symbol, ChartInterval.HOUR)
+        _uiState.update {
+            it.copy(
+                livePrice = latestPrice,
+                isPositive24h = isPositive
+            )
+        }
+    }
+
+    fun initialize() {
+        if (currentSymbol.isBlank()) return
+
+        loadChart(currentSymbol, ChartInterval.HOUR)
         observeLivePrices()
     }
 
@@ -78,12 +95,15 @@ class ChartViewModel @Inject constructor(
 
         viewModelScope.launch {
 
-            observeLivePricesUseCase().collect { (symbol, price) ->
+            observeLivePricesUseCase().collect { update ->
 
-                if (symbol == currentSymbol) {
+                if (update.symbol == currentSymbol) {
 
                     _uiState.update {
-                        it.copy(livePrice = price)
+                        it.copy(
+                            livePrice = update.currentPrice,
+                            isPositive24h = update.isPositive24h,
+                        )
                     }
                 }
             }

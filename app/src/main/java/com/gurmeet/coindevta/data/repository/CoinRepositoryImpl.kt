@@ -6,6 +6,7 @@ import com.gurmeet.coindevta.data.mapper.toEntity
 import com.gurmeet.coindevta.data.remote.api.BinanceApi
 import com.gurmeet.coindevta.data.remote.websocket.BinanceSocketManager
 import com.gurmeet.coindevta.domain.model.Coin
+import com.gurmeet.coindevta.domain.model.TickerUpdate
 import com.gurmeet.coindevta.domain.repository.CoinRepository
 import com.gurmeet.coindevta.util.Response
 import kotlinx.coroutines.Dispatchers
@@ -64,7 +65,7 @@ class CoinRepositoryImpl @Inject constructor(
     // 3️⃣ Live WebSocket Prices (NO DB WRITE)
     // ---------------------------------------------------------
 
-    override fun observeLivePrices(): Flow<Pair<String, Double>> {
+    override fun observeLivePrices(): Flow<TickerUpdate> {
         return socketManager.observeAllPrices()
             .buffer(capacity = 5000)
             .conflate()

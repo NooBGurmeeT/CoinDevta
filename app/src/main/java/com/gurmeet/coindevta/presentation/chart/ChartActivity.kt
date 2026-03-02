@@ -18,7 +18,7 @@ class ChartActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val symbol = intent.getStringExtra("symbol") ?: ""
+        handleIntent()
 
         val chartScreenUi = ChartScreenUi()
 
@@ -26,18 +26,18 @@ class ChartActivity : ComponentActivity() {
 
             val state by viewModel.uiState.collectAsState()
 
-            LaunchedEffect(symbol) {
-                viewModel.initialize(symbol)
+            LaunchedEffect(viewModel.currentSymbol) {
+                viewModel.initialize()
             }
 
             CoinDevtaTheme {
                 chartScreenUi.LayoutUI(
-                    symbol = symbol,
+                    symbol = viewModel.currentSymbol,
                     state = state,
                     onEvent = { event ->
                         when (event) {
                             is ChartUiEvent.OnIntervalSelected ->
-                                viewModel.loadChart(symbol, event.interval)
+                                viewModel.loadChart(viewModel.currentSymbol, event.interval)
 
                             ChartUiEvent.OnBackClicked ->
                                 finish()
@@ -46,5 +46,19 @@ class ChartActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    private fun handleIntent() {
+        val symbol = intent.getStringExtra("symbol") ?: ""
+        val latestPrice =
+            intent.getDoubleExtra("latest_price", 0.0)
+        val isPositive =
+            intent.getBooleanExtra("is_positive", true)
+
+        viewModel.setInitialData(
+            symbol,
+            latestPrice,
+            isPositive
+        )
     }
 }

@@ -1,6 +1,7 @@
 package com.gurmeet.coindevta.presentation.home
 
 import com.gurmeet.coindevta.domain.model.Coin
+import com.gurmeet.coindevta.domain.model.TickerUpdate
 
 data class HomeScreenState(
     val isLoading: Boolean = false,
@@ -10,6 +11,6 @@ data class HomeScreenState(
     val searchQuery: String = "",
     val selectedSort: SortType = SortType.MARKET_CAP_DESC,
     val coins: List<Coin> = emptyList(),
-    val priceMap: Map<String, Double> = emptyMap(),
+    val tickerMap: Map<String, TickerUpdate> = emptyMap(),
     val error: String? = null
 )
