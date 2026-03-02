@@ -80,9 +80,17 @@ class CoinWidgetService : Service() {
     }
 
     private fun observeSocket() {
+
+        // 1️⃣ SOCKET COLLECTOR
         serviceScope.launch {
 
             socketManager.observeAllPrices()
+                .onStart {
+                    connectionState.value = false
+                }
+                .catch {
+                    connectionState.value = false
+                }
                 .collect { update: TickerUpdate ->
 
                     connectionState.value = true
@@ -107,6 +115,29 @@ class CoinWidgetService : Service() {
                         }
                     }
                 }
+        }
+
+        // 2️⃣ HEALTH MONITOR (SEPARATE COROUTINE)
+        serviceScope.launch {
+
+            var lastUpdateTime = System.currentTimeMillis()
+
+            // Track updates
+            launch {
+                priceState.collect {
+                    lastUpdateTime = System.currentTimeMillis()
+                }
+            }
+
+            while (isActive) {
+                delay(15000)
+
+                val now = System.currentTimeMillis()
+
+                if (now - lastUpdateTime > 15000) {
+                    connectionState.value = false
+                }
+            }
         }
     }
 

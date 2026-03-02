@@ -2,6 +2,7 @@ package com.gurmeet.coindevta.service
 
 import android.app.*
 import android.content.Intent
+import android.graphics.Color
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
@@ -10,7 +11,10 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import javax.inject.Inject
 import com.gurmeet.coindevta.data.remote.websocket.BinanceSocketManager
+import com.gurmeet.coindevta.domain.model.TickerUpdate
 import com.gurmeet.coindevta.domain.usecase.ObserveCoinsUseCase
+import kotlin.math.absoluteValue
+import androidx.core.graphics.toColorInt
 
 @AndroidEntryPoint
 class PinnedPriceService : Service() {
@@ -24,15 +28,32 @@ class PinnedPriceService : Service() {
     private var socketJob: Job? = null
     private var currentPinned: String? = null
 
+    companion object {
+        private const val CHANNEL_ID = "pinned_coin_channel"
+        private const val NOTIFICATION_ID = 1001
+    }
+
     override fun onCreate() {
         super.onCreate()
-        startForeground(1001, baseNotification("Waiting for pinned coin..."))
+        createChannel()
+        startForeground(
+            NOTIFICATION_ID,
+            baseNotification("Waiting for pinned coin...")
+        )
         observePinnedCoin()
     }
 
-    // -----------------------------------
-    // Observe pinned coin continuously
-    // -----------------------------------
+    override fun onStartCommand(
+        intent: Intent?,
+        flags: Int,
+        startId: Int
+    ): Int {
+        return START_STICKY
+    }
+
+    // --------------------------------------------------
+    // Observe pinned coin
+    // --------------------------------------------------
 
     private fun observePinnedCoin() {
 
@@ -59,9 +80,9 @@ class PinnedPriceService : Service() {
         }
     }
 
-    // -----------------------------------
-    // Restart socket safely
-    // -----------------------------------
+    // --------------------------------------------------
+    // Socket
+    // --------------------------------------------------
 
     private fun restartSocket(symbol: String) {
 
@@ -70,10 +91,16 @@ class PinnedPriceService : Service() {
         socketJob = serviceScope.launch {
 
             socketManager.observeAllPrices()
-                .collect { (socketSymbol, price) ->
+                .collect { update: TickerUpdate ->
 
-                    if (socketSymbol.equals(symbol, true)) {
-                        updateNotification(symbol, price)
+                    if (update.symbol.equals(symbol, true)) {
+
+                        updateNotification(
+                            symbol = symbol,
+                            price = update.currentPrice,
+                            openPrice = update.openPrice24h,
+                            isPositive = update.isPositive24h
+                        )
                     }
                 }
         }
@@ -84,43 +111,90 @@ class PinnedPriceService : Service() {
         socketJob = null
     }
 
-    // -----------------------------------
-    // Notification
-    // -----------------------------------
+    // --------------------------------------------------
+    // Notification UI
+    // --------------------------------------------------
 
-    private fun baseNotification(text: String): Notification {
-
-        val channelId = "pinned_coin_channel"
+    private fun createChannel() {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+
             val channel = NotificationChannel(
-                channelId,
+                CHANNEL_ID,
                 "Pinned Coin",
                 NotificationManager.IMPORTANCE_LOW
             )
+
+            channel.description = "Shows live updates for pinned coin"
+            channel.enableLights(false)
+            channel.enableVibration(false)
+
             getSystemService(NotificationManager::class.java)
                 .createNotificationChannel(channel)
         }
+    }
 
-        return NotificationCompat.Builder(this, channelId)
+    private fun baseNotification(text: String): Notification {
+
+        return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Pinned Coin")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
             .build()
     }
 
-    private fun updateNotification(symbol: String, price: Double) {
+    private fun updateNotification(
+        symbol: String,
+        price: Double,
+        openPrice: Double,
+        isPositive: Boolean
+    ) {
+
+        val changePercent =
+            ((price - openPrice) / openPrice) * 100
+
+        val formattedPrice = "%.4f".format(price)
+        val formattedPercent =
+            "%.2f".format(changePercent.absoluteValue)
+
+        val arrow = if (isPositive) "▲" else "▼"
+
+        val subtitle =
+            "$arrow $formattedPercent% (24h)"
 
         val notification =
-            baseNotification("$symbol  $price")
+            NotificationCompat.Builder(this, CHANNEL_ID)
+                .setContentTitle(symbol)
+                .setContentText("$formattedPrice  •  $subtitle")
+                .setStyle(
+                    NotificationCompat.BigTextStyle()
+                        .bigText(
+                            "$symbol\n" +
+                                    "$formattedPrice\n" +
+                                    "$subtitle"
+                        )
+                )
+                .setSmallIcon(
+                    if (isPositive)
+                        android.R.drawable.arrow_up_float
+                    else
+                        android.R.drawable.arrow_down_float
+                )
+                .setColor(
+                    if (isPositive)
+                        Color.parseColor("#22C55E")
+                    else
+                        Color.parseColor("#EF4444")
+                )
+                .setOnlyAlertOnce(true)
+                .setOngoing(true)
+                .build()
 
-        val manager =
-            getSystemService(NotificationManager::class.java)
-
-        manager.notify(1001, notification)
+        getSystemService(NotificationManager::class.java)
+            .notify(NOTIFICATION_ID, notification)
     }
-
     override fun onDestroy() {
         serviceScope.cancel()
         super.onDestroy()

@@ -39,94 +39,85 @@ class BinanceSocketManager @Inject constructor(
     // Internal socket creator (auto reconnect)
     // --------------------------------------------------
 
-    private fun createSocketFlow(): Flow<TickerUpdate> =
-        channelFlow {
+    private fun createSocketFlow(): Flow<TickerUpdate> {
 
-            while (isActive) {
+        return callbackFlow {
 
-                Log.d("Socket", "Creating WebSocket connection")
+            Log.d("Socket", "Creating WebSocket connection")
 
-                val request = Request.Builder()
-                    .url("wss://stream.binance.com:9443/ws/!miniTicker@arr")
-                    .build()
+            val request = Request.Builder()
+                .url("wss://stream.binance.com:9443/ws/!miniTicker@arr")
+                .build()
 
-                val listener = object : WebSocketListener() {
+            val listener = object : WebSocketListener() {
 
-                    override fun onOpen(
-                        webSocket: WebSocket,
-                        response: Response
-                    ) {
-                        Log.d("Socket", "WebSocket connected")
-                    }
+                override fun onOpen(
+                    webSocket: WebSocket,
+                    response: Response
+                ) {
+                    Log.d("Socket", "WebSocket connected")
+                }
 
-                    override fun onMessage(
-                        webSocket: WebSocket,
-                        text: String
-                    ) {
+                override fun onMessage(
+                    webSocket: WebSocket,
+                    text: String
+                ) {
+                    try {
+                        val jsonArray = JSONArray(text)
 
-                        try {
+                        for (i in 0 until jsonArray.length()) {
 
-                            val jsonArray = JSONArray(text)
-                            val size = jsonArray.length()
+                            val obj = jsonArray.getJSONObject(i)
 
-                            for (i in 0 until size) {
+                            val symbol = obj.optString("s")
+                            val currentPrice = obj.optDouble("c")
+                            val openPrice24h = obj.optDouble("o")
 
-                                val obj = jsonArray.getJSONObject(i)
-
-                                val symbol = obj.optString("s")
-
-                                val currentPrice =
-                                    obj.optDouble("c")
-
-                                val openPrice24h =
-                                    obj.optDouble("o")
-
-                                val isPositive =
-                                    currentPrice >= openPrice24h
-
-                                trySend(
-                                    TickerUpdate(
-                                        symbol = symbol,
-                                        currentPrice = currentPrice,
-                                        openPrice24h = openPrice24h,
-                                        isPositive24h = isPositive
-                                    )
+                            trySend(
+                                TickerUpdate(
+                                    symbol = symbol,
+                                    currentPrice = currentPrice,
+                                    openPrice24h = openPrice24h,
+                                    isPositive24h = currentPrice >= openPrice24h
                                 )
-                            }
-
-                        } catch (e: Exception) {
-                            Log.e("Socket", "Parse error: ${e.message}")
+                            )
                         }
-                    }
 
-                    override fun onFailure(
-                        webSocket: WebSocket,
-                        t: Throwable,
-                        response: Response?
-                    ) {
-                        Log.e("Socket", "WebSocket failure: ${t.message}")
-                        webSocket.close(1000, null)
-                    }
-
-                    override fun onClosed(
-                        webSocket: WebSocket,
-                        code: Int,
-                        reason: String
-                    ) {
-                        Log.d("Socket", "WebSocket closed")
+                    } catch (e: Exception) {
+                        Log.e("Socket", "Parse error: ${e.message}")
                     }
                 }
 
-                val socket = client.newWebSocket(request, listener)
-
-                awaitClose {
-                    Log.d("Socket", "Closing WebSocket")
-                    socket.close(1000, null)
+                override fun onFailure(
+                    webSocket: WebSocket,
+                    t: Throwable,
+                    response: Response?
+                ) {
+                    Log.e("Socket", "WebSocket failure: ${t.message}")
+                    close(t) // 👈 THIS triggers retry
                 }
 
-                // If socket closes, reconnect after delay
-                Log.d("Socket", "Reconnecting in 3 seconds...")
-                delay(3000)
+                override fun onClosed(
+                    webSocket: WebSocket,
+                    code: Int,
+                    reason: String
+                ) {
+                    Log.d("Socket", "WebSocket closed")
+                    close() // 👈 THIS triggers retry
+                }
+            }
+
+            val socket = client.newWebSocket(request, listener)
+
+            awaitClose {
+                Log.d("Socket", "Closing WebSocket")
+                socket.close(1000, null)
             }
         }
+            .retryWhen { cause, attempt ->
+                Log.d("Socket", "Retrying in 3 seconds... Attempt: $attempt")
+                delay(3000)
+                true
+            }
+    }
 }
