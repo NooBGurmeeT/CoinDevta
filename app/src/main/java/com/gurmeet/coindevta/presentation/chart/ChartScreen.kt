@@ -1,25 +1,11 @@
 package com.gurmeet.coindevta.presentation.chart
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,155 +17,282 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ChartScreen(
-    symbol: String,
-    uiState: ChartUiState,
-    livePrice: Double,
-    onBack: () -> Unit
-) {
+class ChartScreenUi {
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = symbol.replace("USDT", ""),
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Composable
+    fun LayoutUI(
+        symbol: String,
+        state: ChartUiState,
+        onEvent: (ChartUiEvent) -> Unit
+    ) {
+
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = symbol.replace("USDT", ""),
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(
+                            onClick = {
+                                onEvent(ChartUiEvent.OnBackClicked)
+                            }
+                        ) {
+                            Icon(
+                                Icons.Default.ArrowBack,
+                                contentDescription = "Back"
+                            )
+                        }
                     }
-                }
-            )
-        },
-        containerColor = Color(0xFFF5F7FA)
-    ) { padding ->
+                )
+            },
+            containerColor = Color(0xFFF5F7FA)
+        ) { padding ->
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp)
-        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp)
+            ) {
 
-            // Price Header Card
-            PriceHeaderCard(symbol, livePrice)
+                PriceHeaderCard(symbol, state.livePrice)
 
-            Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
-            when {
-                uiState.isLoading -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
-                    )
-                }
+                IntervalSelector(
+                    selected = state.selectedInterval,
+                    onSelected = {
+                        onEvent(
+                            ChartUiEvent.OnIntervalSelected(it)
+                        )
+                    }
+                )
 
-                uiState.error != null -> {
-                    Text(
-                        text = uiState.error,
-                        color = Color.Red
-                    )
-                }
+                Spacer(modifier = Modifier.height(20.dp))
 
-                else -> {
-                    ChartCard(uiState.chartPrices)
+                when {
+                    state.isLoading -> {
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    }
+
+                    state.error != null -> {
+                        Text(
+                            text = state.error,
+                            color = Color.Red
+                        )
+                    }
+
+                    else -> {
+                        ChartCard(state.chartPrices)
+                    }
                 }
             }
         }
     }
-}
 
-@Composable
-fun PriceHeaderCard(symbol: String, price: Double) {
+    // -------------------------------
+    // Price Header
+    // -------------------------------
 
-    Card(
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White
-        ),
-        elevation = CardDefaults.cardElevation(6.dp),
-        modifier = Modifier.fillMaxWidth()
+    @Composable
+    private fun PriceHeaderCard(
+        symbol: String,
+        price: Double
     ) {
 
-        Column(
-            modifier = Modifier.padding(20.dp)
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(Color.White),
+            elevation = CardDefaults.cardElevation(6.dp),
+            modifier = Modifier.fillMaxWidth()
         ) {
 
-            Text(
-                text = symbol.replace("USDT", ""),
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Column(
+                modifier = Modifier.padding(20.dp)
+            ) {
+
+                Text(
+                    text = symbol.replace("USDT", ""),
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "₹ %.2f".format(price),
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (price > 0)
+                        Color(0xFF2ECC71)
+                    else
+                        Color.Red
+                )
+            }
+        }
+    }
+
+    // -------------------------------
+    // Interval Selector
+    // -------------------------------
+
+    @Composable
+    private fun IntervalSelector(
+        selected: ChartInterval,
+        onSelected: (ChartInterval) -> Unit
+    ) {
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+
+            ChartInterval.values().forEach { interval ->
+
+                val isSelected = interval == selected
+
+                Button(
+                    onClick = { onSelected(interval) },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor =
+                            if (isSelected)
+                                Color(0xFF2ECC71)
+                            else
+                                Color.LightGray
+                    )
+                ) {
+                    Text(
+                        text = interval.name,
+                        color = if (isSelected)
+                            Color.White
+                        else
+                            Color.Black
+                    )
+                }
+            }
+        }
+    }
+
+    // -------------------------------
+    // Chart Card
+    // -------------------------------
+
+    @Composable
+    private fun ChartCard(
+        prices: List<Double>
+    ) {
+
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(Color.White),
+            elevation = CardDefaults.cardElevation(6.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+
+            Box(
+                modifier = Modifier
+                    .height(320.dp)
+                    .padding(16.dp)
+            ) {
+                LineChart(prices)
+            }
+        }
+    }
+
+    // -------------------------------
+    // Line Chart With Axis
+    // -------------------------------
+
+    @Composable
+    private fun LineChart(prices: List<Double>) {
+
+        if (prices.size < 2) {
+            Text("No chart data")
+            return
+        }
+
+        val maxPrice = prices.maxOrNull() ?: return
+        val minPrice = prices.minOrNull() ?: return
+        val range = (maxPrice - minPrice).takeIf { it != 0.0 } ?: 1.0
+
+        Column {
+
+            // -----------------
+            // Chart Canvas
+            // -----------------
+
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(240.dp)
+            ) {
+
+                val stepX = size.width / (prices.size - 1)
+
+                val path = Path()
+
+                prices.forEachIndexed { index, price ->
+
+                    val x = index * stepX
+
+                    val normalized = (price - minPrice) / range
+                    val y = size.height - (normalized * size.height)
+
+                    if (index == 0) {
+                        path.moveTo(x, y.toFloat())
+                    } else {
+                        path.lineTo(x, y.toFloat())
+                    }
+                }
+
+                drawPath(
+                    path = path,
+                    color = Color(0xFF2ECC71),
+                    style = Stroke(width = 4f, cap = StrokeCap.Round)
+                )
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            Text(
-                text = "₹ $price",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color(0xFF2ECC71)
-            )
-        }
-    }
-}
+            // -----------------
+            // Y Axis Values
+            // -----------------
 
-@Composable
-fun ChartCard(prices: List<Double>) {
+            Column {
+                Text(
+                    text = "High: %.2f".format(maxPrice),
+                    fontSize = 12.sp
+                )
 
-    Card(
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White
-        ),
-        elevation = CardDefaults.cardElevation(6.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
+                Text(
+                    text = "Low: %.2f".format(minPrice),
+                    fontSize = 12.sp
+                )
+            }
 
-        Box(
-            modifier = Modifier
-                .height(300.dp)
-                .padding(16.dp)
-        ) {
-            LineChart(prices)
-        }
-    }
-}
+            Spacer(modifier = Modifier.height(8.dp))
 
-@Composable
-fun LineChart(prices: List<Double>) {
+            // -----------------
+            // X Axis Values
+            // -----------------
 
-    if (prices.isEmpty()) return
-
-    Canvas(modifier = Modifier.fillMaxSize()) {
-
-        val maxPrice = prices.maxOrNull() ?: return@Canvas
-        val minPrice = prices.minOrNull() ?: return@Canvas
-        val priceRange = maxPrice - minPrice
-
-        val stepX = size.width / (prices.size - 1)
-
-        val path = Path()
-
-        prices.forEachIndexed { index, price ->
-
-            val x = index * stepX
-            val y = size.height - ((price - minPrice) / priceRange) * size.height
-
-            if (index == 0) {
-                path.moveTo(x, y.toFloat())
-            } else {
-                path.lineTo(x, y.toFloat())
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Start", fontSize = 12.sp)
+                Text("Now", fontSize = 12.sp)
             }
         }
-
-        drawPath(
-            path = path,
-            color = Color(0xFF2ECC71),
-            style = Stroke(width = 4f, cap = StrokeCap.Round)
-        )
     }
 }

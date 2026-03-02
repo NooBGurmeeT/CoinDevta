@@ -22,6 +22,4 @@ interface CoinRepository {
     suspend fun unPinCoin()
 
     suspend fun getPinnedCoin(): Coin?
-
-    suspend fun getCurrentDayChart(symbol: String): Response<List<Double>>
 }

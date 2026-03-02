@@ -3,7 +3,9 @@ package com.gurmeet.coindevta.di
 import com.gurmeet.coindevta.data.local.dao.CoinDao
 import com.gurmeet.coindevta.data.remote.api.BinanceApi
 import com.gurmeet.coindevta.data.remote.websocket.BinanceSocketManager
+import com.gurmeet.coindevta.data.repository.ChartRepositoryImpl
 import com.gurmeet.coindevta.data.repository.CoinRepositoryImpl
+import com.gurmeet.coindevta.domain.repository.ChartRepository
 import com.gurmeet.coindevta.domain.repository.CoinRepository
 import dagger.Module
 import dagger.Provides
@@ -26,6 +28,16 @@ object RepositoryModule {
             api,
             dao,
             socketManager
+        )
+    }
+
+    @Provides
+    @Singleton
+    fun provideChartRepository(
+        api: BinanceApi,
+    ): ChartRepository {
+        return ChartRepositoryImpl(
+            api
         )
     }
 }

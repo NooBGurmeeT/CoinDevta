@@ -117,20 +117,4 @@ class CoinRepositoryImpl @Inject constructor(
     override suspend fun getPinnedCoin(): Coin? {
         return dao.getPinnedCoin()?.toDomain()
     }
-
-    // ---------------------------------------------------------
-    // 6️⃣ Chart Data
-    // ---------------------------------------------------------
-
-    override suspend fun getCurrentDayChart(
-        symbol: String
-    ): Response<List<Double>> {
-        return try {
-            val klines = api.getKlines(symbol)
-            val prices = klines.map { it[4].toString().toDouble() }
-            Response.Success(prices)
-        } catch (e: Exception) {
-            Response.Error("Chart fetch failed", e)
-        }
-    }
 }

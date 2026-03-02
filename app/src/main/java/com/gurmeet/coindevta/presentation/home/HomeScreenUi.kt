@@ -480,7 +480,7 @@ class HomeScreenUi {
                     if (state.isExpandedFavorites)
                         favorites
                     else
-                        favorites.take(3)
+                        favorites.take(2)
 
                 visible.forEach { coin ->
 
@@ -504,7 +504,7 @@ class HomeScreenUi {
                     Spacer(Modifier.height(12.dp))
                 }
 
-                if (favorites.size > 3) {
+                if (favorites.size > 2) {
                     TextButton(
                         onClick = {
                             onAction(HomeAction.ToggleExpandFavorites)

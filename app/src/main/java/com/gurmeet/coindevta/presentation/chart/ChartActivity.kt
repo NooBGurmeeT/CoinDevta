@@ -20,20 +20,29 @@ class ChartActivity : ComponentActivity() {
 
         val symbol = intent.getStringExtra("symbol") ?: ""
 
+        val chartScreenUi = ChartScreenUi()
+
         setContent {
 
-            val uiState by viewModel.uiState.collectAsState()
+            val state by viewModel.uiState.collectAsState()
 
-            LaunchedEffect(Unit) {
-                viewModel.loadChart(symbol)
+            LaunchedEffect(symbol) {
+                viewModel.initialize(symbol)
             }
 
             CoinDevtaTheme {
-                ChartScreen(
+                chartScreenUi.LayoutUI(
                     symbol = symbol,
-                    uiState = uiState,
-                    livePrice = viewModel.livePrice.value,
-                    onBack = { finish() }
+                    state = state,
+                    onEvent = { event ->
+                        when (event) {
+                            is ChartUiEvent.OnIntervalSelected ->
+                                viewModel.loadChart(symbol, event.interval)
+
+                            ChartUiEvent.OnBackClicked ->
+                                finish()
+                        }
+                    }
                 )
             }
         }

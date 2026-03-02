@@ -3,7 +3,7 @@ package com.gurmeet.coindevta.presentation.chart
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.gurmeet.coindevta.domain.usecase.GetCurrentDayChartUseCase
+import com.gurmeet.coindevta.domain.usecase.GetChartUseCase
 import com.gurmeet.coindevta.domain.usecase.ObserveLivePricesUseCase
 import com.gurmeet.coindevta.util.Response
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -15,21 +15,41 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ChartViewModel @Inject constructor(
-    private val getCurrentDayChartUseCase: GetCurrentDayChartUseCase,
+    private val getChartUseCase: GetChartUseCase,
     private val observeLivePricesUseCase: ObserveLivePricesUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChartUiState())
     val uiState: StateFlow<ChartUiState> = _uiState
 
-    val livePrice = mutableStateOf(0.0)
+    private var currentSymbol: String? = null
 
-    fun loadChart(symbol: String) {
+    // Called once from Activity
+    fun initialize(symbol: String) {
+        if (currentSymbol != null) return
+        currentSymbol = symbol
+
+        loadChart(symbol, ChartInterval.HOUR)
+        observeLivePrices()
+    }
+
+    fun loadChart(symbol: String, interval: ChartInterval) {
+
         viewModelScope.launch {
 
-            _uiState.update { it.copy(isLoading = true) }
+            _uiState.update {
+                it.copy(
+                    isLoading = true,
+                    selectedInterval = interval,
+                    error = null
+                )
+            }
 
-            when (val response = getCurrentDayChartUseCase(symbol)) {
+            when (val response = getChartUseCase(
+                symbol = symbol,
+                interval = interval.apiValue,
+                limit = interval.limit
+            )) {
 
                 is Response.Success -> {
                     _uiState.update {
@@ -49,7 +69,23 @@ class ChartViewModel @Inject constructor(
                     }
                 }
 
-                else -> {}
+                else -> Unit
+            }
+        }
+    }
+
+    private fun observeLivePrices() {
+
+        viewModelScope.launch {
+
+            observeLivePricesUseCase().collect { (symbol, price) ->
+
+                if (symbol == currentSymbol) {
+
+                    _uiState.update {
+                        it.copy(livePrice = price)
+                    }
+                }
             }
         }
     }
