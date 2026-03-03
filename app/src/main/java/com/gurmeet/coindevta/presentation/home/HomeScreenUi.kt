@@ -51,27 +51,49 @@ class HomeScreenUi {
 
             if (state.isFoldableExpanded) {
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                ) {
+                if (favorites.isEmpty() && pinnedCoin == null) {
 
-                    CoinListSection(
-                        state = state,
-                        pinnedCoin = pinnedCoin,
-                        onAction = onAction,
-                        onLongHold = { pinCandidate = it },
-                        modifier = Modifier.weight(1f)
-                    )
+                    Column(
+                        Modifier
+                            .fillMaxSize()
+                            .padding(padding)
+                    ) {
 
-                    ExpandedRightSection(
-                        favorites = favorites,
-                        pinnedCoin = pinnedCoin,
-                        tickerMap = state.tickerMap,
-                        onAction = onAction,
-                        modifier = Modifier.weight(0.7f)
-                    )
+                        SearchBarSection(state, onAction)
+
+                        CoinListSection(
+                            state = state,
+                            pinnedCoin = pinnedCoin,
+                            onAction = onAction,
+                            onLongHold = { pinCandidate = it },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                } else {
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(padding)
+                    ) {
+
+                        CoinListSection(
+                            state = state,
+                            pinnedCoin = pinnedCoin,
+                            onAction = onAction,
+                            onLongHold = { pinCandidate = it },
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        ExpandedRightSection(
+                            favorites = favorites,
+                            pinnedCoin = pinnedCoin,
+                            tickerMap = state.tickerMap,
+                            onAction = onAction,
+                            modifier = Modifier.weight(0.7f)
+                        )
+                    }
                 }
 
             } else {
@@ -82,11 +104,67 @@ class HomeScreenUi {
                         .padding(padding)
                 ) {
 
-                    FavoriteSection(
-                        favorites = favorites,
-                        state = state,
-                        onAction = onAction
-                    )
+                    if (favorites.isNotEmpty()) {
+                        FavoriteSection(
+                            favorites = favorites,
+                            state = state,
+                            onAction = onAction
+                        )
+                    }
+
+                    val localPinned = pinnedCoin
+                    if (favorites.isEmpty() && localPinned != null) {
+
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White)
+                        ) {
+
+                            Column(Modifier.padding(16.dp)) {
+
+                                Text(
+                                    "Pinned Coin",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                )
+
+                                Spacer(Modifier.height(12.dp))
+
+                                val ticker = state.tickerMap[localPinned.symbol]
+                                val price = ticker?.currentPrice ?: localPinned.price
+                                val isPositive = ticker?.isPositive24h ?: true
+
+                                val priceColor =
+                                    if (isPositive) Color(0xFF22C55E)
+                                    else Color(0xFFEF4444)
+
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+
+                                    Column {
+                                        Text(localPinned.name, fontWeight = FontWeight.Medium)
+                                        Text(
+                                            localPinned.symbol.uppercase(),
+                                            fontSize = 12.sp,
+                                            color = Color(0xFF667085)
+                                        )
+                                    }
+
+                                    Text(
+                                        "$ ${String.format("%.2f", price)}",
+                                        color = priceColor,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+                    }
 
                     SearchBarSection(state, onAction)
 
@@ -724,45 +802,39 @@ class HomeScreenUi {
                             val price = ticker?.currentPrice ?: coin.price
                             val isPositive = ticker?.isPositive24h ?: true
 
-
                             val priceColor =
                                 if (isPositive)
                                     Color(0xFF22C55E)
                                 else
                                     Color(0xFFEF4444)
-                            if (pinnedCoin != null) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            onAction(HomeAction.CoinClick(pinnedCoin.symbol))
-                                        },
-                                    horizontalArrangement =
-                                        Arrangement.SpaceBetween
-                                ) {
 
-                                    Column {
-                                        Text(
-                                            coin.name,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                        Text(
-                                            coin.symbol.uppercase(),
-                                            fontSize = 12.sp,
-                                            color = Color(0xFF667085)
-                                        )
-                                    }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onAction(HomeAction.CoinClick(coin.symbol))
+                                    },
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
 
-                                    Column(
-                                        horizontalAlignment = Alignment.End
-                                    ) {
-                                        Text(
-                                            "$ ${String.format("%.2f", price)}",
-                                            color = priceColor,
-                                            fontWeight = FontWeight.Medium
-                                        )
+                                Column {
+                                    Text(
+                                        coin.name,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        coin.symbol.uppercase(),
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF667085)
+                                    )
+                                }
 
-                                    }
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        "$ ${String.format("%.2f", price)}",
+                                        color = priceColor,
+                                        fontWeight = FontWeight.Medium
+                                    )
                                 }
                             }
 
@@ -923,45 +995,44 @@ class HomeScreenUi {
             isBottomSheetOpen = true
         )
 
-        MaterialTheme {
 
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp).
-                background(Color.White),
-                shape = RoundedCornerShape(16.dp)
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+                .background(Color.White),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+
+            Column(
+                modifier = Modifier.padding(24.dp)
             ) {
 
-                Column(
-                    modifier = Modifier.padding(24.dp)
-                ) {
+                Text(
+                    text = "Sort By",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.SemiBold
+                    )
+                )
 
-                    Text(
-                        text = "Sort By",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.SemiBold
-                        )
+                Spacer(Modifier.height(20.dp))
+
+                HomeScreenUi().apply {
+                    SortItem(
+                        title = "Market Cap ↑",
+                        selected = true,
+                        onClick = {}
                     )
 
-                    Spacer(Modifier.height(20.dp))
-
-                    HomeScreenUi().apply {
-                        SortItem(
-                            title = "Market Cap ↑",
-                            selected = true,
-                            onClick = {}
-                        )
-
-                        SortItem(
-                            title = "Market Cap ↓",
-                            selected = false,
-                            onClick = {}
-                        )
-                    }
+                    SortItem(
+                        title = "Market Cap ↓",
+                        selected = false,
+                        onClick = {}
+                    )
                 }
             }
         }
+
     }
 
     // Preview for Pin Confirmation Sheet

@@ -280,17 +280,14 @@ class CoinWidgetService : Service() {
      */
     private fun createNotification(): Notification {
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "Coin Widget",
+            NotificationManager.IMPORTANCE_MIN
+        )
 
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Coin Widget",
-                NotificationManager.IMPORTANCE_MIN
-            )
-
-            getSystemService(NotificationManager::class.java)
-                .createNotificationChannel(channel)
-        }
+        getSystemService(NotificationManager::class.java)
+            .createNotificationChannel(channel)
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Live Coin Prices")
