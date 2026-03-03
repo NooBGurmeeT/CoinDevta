@@ -1,7 +1,6 @@
 package com.gurmeet.coindevta.widget
 
 import android.content.Context
-import android.content.Intent
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -67,7 +66,6 @@ class CoinWidget : GlanceAppWidget() {
             }
 
             WidgetContent(
-                context = context,
                 prices = prices,
                 connected = connected
             )
@@ -82,142 +80,141 @@ class CoinWidget : GlanceAppWidget() {
      */
     @Composable
     private fun WidgetContent(
-        context: Context,
         prices: JSONObject,
         connected: Boolean
     ) {
 
-        Column(
+        // ✅ WHOLE WIDGET CLICKABLE CONTAINER
+        Box(
             modifier = GlanceModifier
                 .fillMaxSize()
                 .background(ColorProvider(Color(0xFF0F172A)))
-                .padding(16.dp)
+                .clickable(actionStartActivity<MainActivity>())
         ) {
 
-            // Header navigates to MainActivity
-            Text(
-                text = "★ Favorite Coins",
-                modifier = GlanceModifier.clickable(
-                    actionStartActivity(
-                        Intent(context, MainActivity::class.java).apply {
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                        }
-                    )
-                ),
-                style = TextStyle(
-                    color = ColorProvider(Color(0xFFF8FAFC)),
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            )
-
-            Spacer(GlanceModifier.height(12.dp))
-
-            // --------------------------------------------------
-            // NO INTERNET / DISCONNECTED STATE
-            // --------------------------------------------------
-
-            if (!connected) {
+            Column(
+                modifier = GlanceModifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+            ) {
 
                 Text(
-                    text = "No Internet",
+                    text = "★ Favorite Coins",
                     style = TextStyle(
-                        color = ColorProvider(Color(0xFFEF4444)),
+                        color = ColorProvider(Color(0xFFF8FAFC)),
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )
                 )
 
-                Spacer(GlanceModifier.height(10.dp))
+                Spacer(GlanceModifier.height(12.dp))
 
-                Button(
-                    text = "Reload",
-                    onClick = actionRunCallback<ReloadAction>()
-                )
+                // --------------------------------------------------
+                // NO INTERNET / DISCONNECTED STATE
+                // --------------------------------------------------
 
-                return@Column
-            }
+                if (!connected) {
 
-            // Shows loading state
-            if (prices.length() == 0) {
+                    Text(
+                        text = "No Internet",
+                        style = TextStyle(
+                            color = ColorProvider(Color(0xFFEF4444)),
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+
+                    Spacer(GlanceModifier.height(10.dp))
+
+                    // ✅ Button overrides parent click
+                    Button(
+                        text = "Reload",
+                        onClick = actionRunCallback<ReloadAction>()
+                    )
+
+                    return@Column
+                }
+
+                // Shows loading state
+                if (prices.length() == 0) {
+
+                    Text(
+                        text = "Waiting for prices...",
+                        style = TextStyle(
+                            color = ColorProvider(Color(0xFF94A3B8))
+                        )
+                    )
+
+                    return@Column
+                }
+
+                val entries = prices.keys().asSequence().toList()
+
+                LazyColumn(
+                    modifier = GlanceModifier.defaultWeight()
+                ) {
+
+                    items(entries.size) { index ->
+
+                        val symbol = entries[index]
+                        val obj = prices.optJSONObject(symbol)
+
+                        val price =
+                            obj?.optString("price", "--") ?: "--"
+
+                        val positive =
+                            obj?.optBoolean("positive", true) ?: true
+
+                        val priceColor =
+                            if (positive)
+                                ColorProvider(Color(0xFF22C55E))
+                            else
+                                ColorProvider(Color(0xFFEF4444))
+
+                        Row(
+                            modifier = GlanceModifier
+                                .fillMaxWidth()
+                                .background(
+                                    ColorProvider(Color(0xFF1E293B))
+                                )
+                                .padding(
+                                    horizontal = 12.dp,
+                                    vertical = 10.dp
+                                )
+                        ) {
+
+                            Text(
+                                text = symbol,
+                                style = TextStyle(
+                                    color = ColorProvider(Color(0xFFE2E8F0)),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            )
+
+                            Spacer(GlanceModifier.defaultWeight())
+
+                            Text(
+                                text = price,
+                                style = TextStyle(
+                                    color = priceColor,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                        }
+
+                        Spacer(GlanceModifier.height(8.dp))
+                    }
+                }
+
+                Spacer(GlanceModifier.height(12.dp))
 
                 Text(
-                    text = "Waiting for prices...",
+                    text = "Live • 5-6 sec refresh",
                     style = TextStyle(
-                        color = ColorProvider(Color(0xFF94A3B8))
+                        color = ColorProvider(Color(0xFF94A3B8)),
+                        fontSize = 10.sp
                     )
                 )
-
-                return@Column
             }
-
-            val entries = prices.keys().asSequence().toList()
-
-            LazyColumn(
-                modifier = GlanceModifier.defaultWeight()
-            ) {
-
-                items(entries.size) { index ->
-
-                    val symbol = entries[index]
-                    val obj = prices.optJSONObject(symbol)
-
-                    val price =
-                        obj?.optString("price", "--") ?: "--"
-
-                    val positive =
-                        obj?.optBoolean("positive", true) ?: true
-
-                    val priceColor =
-                        if (positive)
-                            ColorProvider(Color(0xFF22C55E))
-                        else
-                            ColorProvider(Color(0xFFEF4444))
-
-                    Row(
-                        modifier = GlanceModifier
-                            .fillMaxWidth()
-                            .background(
-                                ColorProvider(Color(0xFF1E293B))
-                            )
-                            .padding(
-                                horizontal = 12.dp,
-                                vertical = 10.dp
-                            )
-                    ) {
-
-                        Text(
-                            text = symbol,
-                            style = TextStyle(
-                                color = ColorProvider(Color(0xFFE2E8F0)),
-                                fontWeight = FontWeight.Medium
-                            )
-                        )
-
-                        Spacer(GlanceModifier.defaultWeight())
-
-                        Text(
-                            text = price,
-                            style = TextStyle(
-                                color = priceColor,
-                                fontWeight = FontWeight.Bold
-                            )
-                        )
-                    }
-
-                    Spacer(GlanceModifier.height(8.dp))
-                }
-            }
-
-            Spacer(GlanceModifier.height(12.dp))
-
-            // Footer showing refresh indicator
-            Text(
-                text = "Live • 5-6 sec refresh",
-                style = TextStyle(
-                    color = ColorProvider(Color(0xFF94A3B8)),
-                    fontSize = 10.sp
-                )
-            )
         }
     }
 }
