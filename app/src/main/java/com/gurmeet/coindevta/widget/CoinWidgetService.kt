@@ -15,6 +15,7 @@ import com.gurmeet.coindevta.data.remote.websocket.BinanceSocketManager
 import com.gurmeet.coindevta.domain.model.TickerUpdate
 import com.gurmeet.coindevta.logger.ErrorLogger
 import com.gurmeet.coindevta.logger.LogLevel
+import com.gurmeet.coindevta.util.NetworkMonitor
 import org.json.JSONObject
 
 /**
@@ -29,6 +30,7 @@ class CoinWidgetService : Service() {
 
     @Inject lateinit var socketManager: BinanceSocketManager
     @Inject lateinit var errorLogger: ErrorLogger
+    @Inject lateinit var networkMonitor: NetworkMonitor
 
     companion object {
         private const val TAG = "CoinWidgetService"
@@ -69,6 +71,7 @@ class CoinWidgetService : Service() {
             createNotification()
         )
 
+        observeNetwork() // ✅ ADDED
         observeFavorites()
         observeSocket()
         pushLoop()
@@ -79,6 +82,31 @@ class CoinWidgetService : Service() {
         flags: Int,
         startId: Int
     ): Int = START_STICKY
+
+    /**
+     * Observes network connectivity and updates widget connection state.
+     */
+    private fun observeNetwork() {
+        serviceScope.launch {
+            networkMonitor.isConnected
+                .collect { connected ->
+                    if (!connected) {
+                        errorLogger.log(
+                            TAG,
+                            "Internet lost",
+                            LogLevel.WARNING
+                        )
+                        connectionState.value = false
+                    } else {
+                        errorLogger.log(
+                            TAG,
+                            "Internet restored",
+                            LogLevel.INFO
+                        )
+                    }
+                }
+        }
+    }
 
     /**
      * Observes DataStore for favorite coins changes.
@@ -205,6 +233,11 @@ class CoinWidgetService : Service() {
                 delay(5000)
 
                 if (favoriteCache.isEmpty()) continue
+
+                // Force offline state if no internet
+                if (!networkMonitor.isConnected.value) {
+                    connectionState.value = false
+                }
 
                 val pricesSnapshot = priceState.value
                 val connectedSnapshot = connectionState.value

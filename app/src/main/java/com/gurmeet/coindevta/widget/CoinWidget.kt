@@ -99,7 +99,9 @@ class CoinWidget : GlanceAppWidget() {
                 text = "★ Favorite Coins",
                 modifier = GlanceModifier.clickable(
                     actionStartActivity(
-                        Intent(context, MainActivity::class.java)
+                        Intent(context, MainActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
                     )
                 ),
                 style = TextStyle(
@@ -111,11 +113,14 @@ class CoinWidget : GlanceAppWidget() {
 
             Spacer(GlanceModifier.height(12.dp))
 
-            // Shows disconnected state
+            // --------------------------------------------------
+            // NO INTERNET / DISCONNECTED STATE
+            // --------------------------------------------------
+
             if (!connected) {
 
                 Text(
-                    text = "Disconnected",
+                    text = "No Internet",
                     style = TextStyle(
                         color = ColorProvider(Color(0xFFEF4444)),
                         fontWeight = FontWeight.Bold
@@ -147,7 +152,6 @@ class CoinWidget : GlanceAppWidget() {
 
             val entries = prices.keys().asSequence().toList()
 
-            // Scrollable price list
             LazyColumn(
                 modifier = GlanceModifier.defaultWeight()
             ) {

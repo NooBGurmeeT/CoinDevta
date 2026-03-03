@@ -1,6 +1,7 @@
 package com.gurmeet.coindevta.presentation.chart
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -88,6 +89,8 @@ class ChartActivity : ComponentActivity() {
                 )
             }
         }
+
+        observeEffects()
     }
 
     private fun handleIntent() {
@@ -102,5 +105,23 @@ class ChartActivity : ComponentActivity() {
             latestPrice,
             isPositive
         )
+    }
+
+    private fun observeEffects() {
+        lifecycleScope.launch {
+            viewModel.effect.collect { effect ->
+
+                when (effect) {
+
+                    is ChartEffect.ShowToast -> {
+                        Toast.makeText(
+                            this@ChartActivity,
+                            effect.message,
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            }
+        }
     }
 }

@@ -9,11 +9,15 @@ import com.gurmeet.coindevta.domain.usecase.GetChartUseCase
 import com.gurmeet.coindevta.domain.usecase.ObserveLivePricesUseCase
 import com.gurmeet.coindevta.logger.ErrorLogger
 import com.gurmeet.coindevta.logger.LogLevel
+import com.gurmeet.coindevta.presentation.home.HomeEffect
+import com.gurmeet.coindevta.util.NetworkMonitor
 import com.gurmeet.coindevta.util.Response
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 
@@ -22,7 +26,8 @@ class ChartViewModel @Inject constructor(
     private val getChartUseCase: GetChartUseCase,
     private val observeLivePricesUseCase: ObserveLivePricesUseCase,
     private val analyticsLogger: AnalyticsLogger,
-    private val errorLogger: ErrorLogger
+    private val errorLogger: ErrorLogger,
+    private val networkMonitor: NetworkMonitor
 ) : ViewModel() {
 
     companion object {
@@ -32,6 +37,9 @@ class ChartViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ChartUiState())
     val uiState: StateFlow<ChartUiState> = _uiState
 
+    private val _effect = MutableSharedFlow<ChartEffect>()
+    val effect = _effect.asSharedFlow()
+
     var currentSymbol: String = ""
     private var initialPrice: Double = 0.0
     private var initialIsPositive: Boolean = true
@@ -39,6 +47,21 @@ class ChartViewModel @Inject constructor(
     private var latestLivePrice: Double? = null
     private var chartJob: Job? = null
 
+
+    init {
+        viewModelScope.launch {
+            networkMonitor.isConnected.collect { connected ->
+
+                if (!connected) {
+                    _effect.emit(
+                        ChartEffect.ShowToast("No internet connection")
+                    )
+                } else {
+                    initialize()
+                }
+            }
+        }
+    }
     /**
      * Sets initial data passed from previous screen.
      */
@@ -133,6 +156,12 @@ class ChartViewModel @Inject constructor(
                             error = response.message
                         )
                     }
+
+                    _effect.emit(
+                        ChartEffect.ShowToast(
+                            response.message ?: "Failed to load chart data"
+                        )
+                    )
                 }
 
                 else -> Unit
@@ -144,19 +173,33 @@ class ChartViewModel @Inject constructor(
 
         viewModelScope.launch {
 
-            observeLivePricesUseCase().collect { update ->
+            try {
+                observeLivePricesUseCase().collect { update ->
 
-                if (update.symbol == currentSymbol) {
+                    if (update.symbol == currentSymbol) {
 
-                    latestLivePrice = update.currentPrice
+                        latestLivePrice = update.currentPrice
 
-                    _uiState.update {
-                        it.copy(
-                            livePrice = update.currentPrice,
-                            isPositive24h = update.isPositive24h
-                        )
+                        _uiState.update {
+                            it.copy(
+                                livePrice = update.currentPrice,
+                                isPositive24h = update.isPositive24h
+                            )
+                        }
                     }
                 }
+            } catch (e: Exception) {
+
+                errorLogger.log(
+                    TAG,
+                    "Live price observer failed",
+                    LogLevel.ERROR,
+                    e
+                )
+
+                _effect.emit(
+                    ChartEffect.ShowToast("Live price connection lost")
+                )
             }
         }
     }

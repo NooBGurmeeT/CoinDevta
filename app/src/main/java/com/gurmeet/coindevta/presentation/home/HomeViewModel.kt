@@ -9,6 +9,7 @@ import com.gurmeet.coindevta.domain.model.TickerUpdate
 import com.gurmeet.coindevta.domain.usecase.*
 import com.gurmeet.coindevta.logger.ErrorLogger
 import com.gurmeet.coindevta.logger.LogLevel
+import com.gurmeet.coindevta.util.NetworkMonitor
 import com.gurmeet.coindevta.util.Response
 import com.gurmeet.coindevta.util.windowedByTime
 import com.gurmeet.coindevta.widget.WidgetSyncManager
@@ -34,7 +35,8 @@ class HomeViewModel @Inject constructor(
     private val unPinCoinUseCase: UnPinCoinUseCase,
     private val widgetSyncManager: WidgetSyncManager,
     private val analyticsLogger: AnalyticsLogger,
-    private val errorLogger: ErrorLogger
+    private val errorLogger: ErrorLogger,
+    private val networkMonitor: NetworkMonitor,
 ) : ViewModel() {
 
     companion object {
@@ -96,6 +98,17 @@ class HomeViewModel @Inject constructor(
         analyticsLogger.track(
             AnalyticsEvent(AnalyticsConstants.Home.SCREEN_OPENED)
         )
+
+        viewModelScope.launch {
+            networkMonitor.isConnected.collect { connected ->
+
+                if (!connected) {
+                    _effect.emit(
+                        HomeEffect.ShowToast("No internet connection")
+                    )
+                }
+            }
+        }
     }
 
     /**
@@ -124,6 +137,10 @@ class HomeViewModel @Inject constructor(
                     uiFlags.update {
                         it.copy(isLoading = false, error = result.message)
                     }
+
+                    _effect.emit(
+                        HomeEffect.ShowToast(result.message ?: "Something went wrong")
+                    )
                 }
 
                 else -> {}
@@ -195,6 +212,9 @@ class HomeViewModel @Inject constructor(
                         "Periodic sync failed",
                         LogLevel.ERROR,
                         e
+                    )
+                    _effect.emit(
+                        HomeEffect.ShowToast("Failed to sync latest prices")
                     )
                 }
             }

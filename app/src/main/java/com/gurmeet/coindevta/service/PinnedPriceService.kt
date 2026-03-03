@@ -15,6 +15,7 @@ import com.gurmeet.coindevta.domain.model.TickerUpdate
 import com.gurmeet.coindevta.domain.usecase.ObserveCoinsUseCase
 import com.gurmeet.coindevta.logger.ErrorLogger
 import com.gurmeet.coindevta.logger.LogLevel
+import com.gurmeet.coindevta.util.NetworkMonitor
 import kotlin.math.absoluteValue
 
 /**
@@ -31,6 +32,7 @@ class PinnedPriceService : Service() {
     @Inject lateinit var socketManager: BinanceSocketManager
     @Inject lateinit var observeCoinsUseCase: ObserveCoinsUseCase
     @Inject lateinit var errorLogger: ErrorLogger
+    @Inject lateinit var networkMonitor: NetworkMonitor
 
     companion object {
         private const val TAG = "PinnedPriceService"
@@ -58,6 +60,7 @@ class PinnedPriceService : Service() {
             baseNotification("Waiting for pinned coin...")
         )
 
+        observeNetwork()
         observePinnedCoin()
     }
 
@@ -66,6 +69,66 @@ class PinnedPriceService : Service() {
         flags: Int,
         startId: Int
     ): Int = START_STICKY
+
+    // --------------------------------------------------
+    // Network awareness
+    // --------------------------------------------------
+
+    /**
+     * Observes network connectivity and handles socket accordingly.
+     */
+    private fun observeNetwork() {
+
+        serviceScope.launch {
+
+            networkMonitor.isConnected
+                .collect { connected ->
+
+                    if (!connected) {
+
+                        errorLogger.log(
+                            TAG,
+                            "Internet lost",
+                            LogLevel.WARNING
+                        )
+
+                        stopSocket()
+
+                        updateOfflineNotification()
+
+                    } else {
+
+                        errorLogger.log(
+                            TAG,
+                            "Internet restored",
+                            LogLevel.INFO
+                        )
+
+                        currentPinned?.let {
+                            restartSocket(it)
+                        }
+                    }
+                }
+        }
+    }
+
+    /**
+     * Updates notification when internet is lost.
+     */
+    private fun updateOfflineNotification() {
+
+        val notification =
+            NotificationCompat.Builder(this, CHANNEL_ID)
+                .setContentTitle(currentPinned ?: "Pinned Coin")
+                .setContentText("No Internet Connection")
+                .setSmallIcon(android.R.drawable.stat_notify_error)
+                .setOnlyAlertOnce(true)
+                .setOngoing(true)
+                .build()
+
+        getSystemService(NotificationManager::class.java)
+            .notify(NOTIFICATION_ID, notification)
+    }
 
     // --------------------------------------------------
     // Observe pinned coin

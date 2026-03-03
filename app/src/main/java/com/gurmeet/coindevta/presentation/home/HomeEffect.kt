@@ -9,4 +9,5 @@ sealed class HomeEffect {
     object StartPinnedService : HomeEffect()
 
     object StopPinnedService : HomeEffect()
+    data class ShowToast(val message: String) : HomeEffect()
 }

@@ -3,6 +3,7 @@ package com.gurmeet.coindevta.data.remote.websocket
 import com.gurmeet.coindevta.domain.model.TickerUpdate
 import com.gurmeet.coindevta.logger.ErrorLogger
 import com.gurmeet.coindevta.logger.LogLevel
+import com.gurmeet.coindevta.util.NetworkMonitor
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
@@ -18,7 +19,8 @@ import javax.inject.Singleton
 @Singleton
 class BinanceSocketManager @Inject constructor(
     private val client: OkHttpClient,
-    private val errorLogger: ErrorLogger
+    private val errorLogger: ErrorLogger,
+    private val networkMonitor: NetworkMonitor
 ) {
 
     companion object {
@@ -159,12 +161,28 @@ class BinanceSocketManager @Inject constructor(
 
                 errorLogger.log(
                     tag = TAG,
-                    message = "Retrying WebSocket. Attempt: $attempt",
+                    message = "WebSocket failure. Attempt: $attempt",
                     level = LogLevel.WARNING,
                     throwable = cause
                 )
 
-                delay(3000)
+                // If no internet → wait until it becomes available
+                if (!networkMonitor.isConnected.value) {
+                    networkMonitor.isConnected
+                        .filter { it }
+                        .first()
+                }
+
+                // Always apply delay (even if internet is already available)
+                val delayMillis = 5000L
+                delay(delayMillis)
+
+                errorLogger.log(
+                    tag = TAG,
+                    message = "Retrying WebSocket after ${delayMillis}ms",
+                    level = LogLevel.INFO
+                )
+
                 true
             }
     }
