@@ -1,6 +1,7 @@
 package com.gurmeet.coindevta.domain.usecase
 
 import com.gurmeet.coindevta.domain.repository.ChartRepository
+import com.gurmeet.coindevta.presentation.chart.ChartPoint
 import com.gurmeet.coindevta.util.Response
 import javax.inject.Inject
 
@@ -12,7 +13,7 @@ class GetChartUseCase @Inject constructor(
         symbol: String,
         interval: String,
         limit: Int
-    ): Response<List<Double>> {
+    ): Response<List<ChartPoint>>  {
         return repository.getChart(
             symbol = symbol,
             interval = interval,

@@ -4,11 +4,13 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
+import androidx.lifecycle.lifecycleScope
+import androidx.window.layout.FoldingFeature
+import androidx.window.layout.WindowInfoTracker
 import com.gurmeet.coindevta.ui.theme.CoinDevtaTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class ChartActivity : ComponentActivity() {
@@ -26,6 +28,27 @@ class ChartActivity : ComponentActivity() {
 
             val state by viewModel.uiState.collectAsState()
 
+            var isFoldExpanded by remember { mutableStateOf(false) }
+
+            // Foldable detection
+            LaunchedEffect(Unit) {
+                lifecycleScope.launch {
+                    WindowInfoTracker.getOrCreate(this@ChartActivity)
+                        .windowLayoutInfo(this@ChartActivity)
+                        .collect { layoutInfo ->
+
+                            val foldingFeature = layoutInfo.displayFeatures
+                                .filterIsInstance<FoldingFeature>()
+                                .firstOrNull()
+
+                            isFoldExpanded =
+                                foldingFeature != null &&
+                                        foldingFeature.state == FoldingFeature.State.FLAT &&
+                                        foldingFeature.orientation == FoldingFeature.Orientation.VERTICAL
+                        }
+                }
+            }
+
             LaunchedEffect(viewModel.currentSymbol) {
                 viewModel.initialize()
             }
@@ -34,10 +57,14 @@ class ChartActivity : ComponentActivity() {
                 chartScreenUi.LayoutUI(
                     symbol = viewModel.currentSymbol,
                     state = state,
+                    isFoldExpanded = isFoldExpanded,
                     onEvent = { event ->
                         when (event) {
                             is ChartUiEvent.OnIntervalSelected ->
-                                viewModel.loadChart(viewModel.currentSymbol, event.interval)
+                                viewModel.loadChart(
+                                    viewModel.currentSymbol,
+                                    event.interval
+                                )
 
                             ChartUiEvent.OnBackClicked ->
                                 finish()

@@ -17,6 +17,8 @@ import com.gurmeet.coindevta.ui.theme.CoinDevtaTheme
 import com.gurmeet.coindevta.widget.CoinWidgetService
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import androidx.window.layout.FoldingFeature
+import androidx.window.layout.WindowInfoTracker
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -26,12 +28,32 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         setContent {
 
             val windowSizeClass = calculateWindowSizeClass(this)
+            var isFoldExpanded by remember { mutableStateOf(false) }
+
+            LaunchedEffect(Unit) {
+                lifecycleScope.launch {
+                    WindowInfoTracker.getOrCreate(this@MainActivity)
+                        .windowLayoutInfo(this@MainActivity)
+                        .collect { layoutInfo ->
+
+                            val foldingFeature = layoutInfo.displayFeatures
+                                .filterIsInstance<FoldingFeature>()
+                                .firstOrNull()
+
+                            isFoldExpanded =
+                                foldingFeature != null &&
+                                        foldingFeature.state == FoldingFeature.State.FLAT &&
+                                        foldingFeature.orientation == FoldingFeature.Orientation.VERTICAL
+                        }
+                }
+            }
+
             val isExpanded =
                 windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded
+                        || isFoldExpanded
 
             LaunchedEffect(isExpanded) {
                 viewModel.onAction(

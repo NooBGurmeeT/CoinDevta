@@ -68,6 +68,7 @@ class HomeScreenUi {
                         favorites = favorites,
                         pinnedCoin = pinnedCoin,
                         tickerMap = state.tickerMap,
+                        onAction = onAction,
                         modifier = Modifier.weight(0.7f)
                     )
                 }
@@ -587,6 +588,7 @@ class HomeScreenUi {
                     val ticker = state.tickerMap[coin.symbol]
                     val price = ticker?.currentPrice ?: coin.price
                     val isPositive = ticker?.isPositive24h ?: true
+
                     val priceColor =
                         if (isPositive)
                             Color(0xFF22C55E)
@@ -594,17 +596,48 @@ class HomeScreenUi {
                             Color(0xFFEF4444)
 
                     Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onAction(HomeAction.CoinClick(coin.symbol))
+                            },
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
 
-                        Column {
-                            Text(coin.name, fontWeight = FontWeight.Medium)
-                            Text(
-                                coin.symbol.uppercase(),
-                                fontSize = 12.sp,
-                                color = Color(0xFF667085)
-                            )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+
+                            IconButton(
+                                onClick = {
+                                    onAction(
+                                        HomeAction.ToggleFavorite(
+                                            coin.symbol
+                                        )
+                                    )
+                                }
+                            ) {
+                                Icon(
+                                    Icons.Default.Favorite,
+                                    contentDescription = null,
+                                    tint = Color(0xFFEF4444)
+                                )
+                            }
+
+                            Spacer(Modifier.width(6.dp))
+
+                            Column {
+                                Text(
+                                    coin.name,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    coin.symbol.uppercase(),
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF667085)
+                                )
+                            }
                         }
 
                         Text(
@@ -639,6 +672,7 @@ class HomeScreenUi {
         favorites: List<Coin>,
         pinnedCoin: Coin?,
         tickerMap: Map<String, TickerUpdate>,
+        onAction: (HomeAction) -> Unit,
         modifier: Modifier = Modifier
     ) {
 
@@ -690,34 +724,39 @@ class HomeScreenUi {
                                     Color(0xFF22C55E)
                                 else
                                     Color(0xFFEF4444)
-
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement =
-                                    Arrangement.SpaceBetween
-                            ) {
-
-                                Column {
-                                    Text(
-                                        coin.name,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                    Text(
-                                        coin.symbol.uppercase(),
-                                        fontSize = 12.sp,
-                                        color = Color(0xFF667085)
-                                    )
-                                }
-
-                                Column(
-                                    horizontalAlignment = Alignment.End
+                            if (pinnedCoin != null) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            onAction(HomeAction.CoinClick(pinnedCoin.symbol))
+                                        },
+                                    horizontalArrangement =
+                                        Arrangement.SpaceBetween
                                 ) {
-                                    Text(
-                                        "$ ${String.format("%.2f", price)}",
-                                        color = priceColor,
-                                        fontWeight = FontWeight.Medium
-                                    )
 
+                                    Column {
+                                        Text(
+                                            coin.name,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        Text(
+                                            coin.symbol.uppercase(),
+                                            fontSize = 12.sp,
+                                            color = Color(0xFF667085)
+                                        )
+                                    }
+
+                                    Column(
+                                        horizontalAlignment = Alignment.End
+                                    ) {
+                                        Text(
+                                            "$ ${String.format("%.2f", price)}",
+                                            color = priceColor,
+                                            fontWeight = FontWeight.Medium
+                                        )
+
+                                    }
                                 }
                             }
 

@@ -1,16 +1,15 @@
 package com.gurmeet.coindevta.presentation.chart
 
-import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gurmeet.coindevta.domain.usecase.GetChartUseCase
 import com.gurmeet.coindevta.domain.usecase.ObserveLivePricesUseCase
 import com.gurmeet.coindevta.util.Response
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
@@ -25,6 +24,9 @@ class ChartViewModel @Inject constructor(
     var currentSymbol: String = ""
     private var initialPrice: Double = 0.0
     private var initialIsPositive: Boolean = true
+
+    private var latestLivePrice: Double? = null
+    private var chartJob: Job? = null
 
     fun setInitialData(
         symbol: String,
@@ -45,12 +47,13 @@ class ChartViewModel @Inject constructor(
 
     fun initialize() {
         if (currentSymbol.isBlank()) return
-
         loadChart(currentSymbol, ChartInterval.HOUR)
         observeLivePrices()
     }
 
     fun loadChart(symbol: String, interval: ChartInterval) {
+
+        chartJob?.cancel()
 
         viewModelScope.launch {
 
@@ -63,18 +66,21 @@ class ChartViewModel @Inject constructor(
             }
 
             when (val response = getChartUseCase(
-                symbol = symbol,
-                interval = interval.apiValue,
-                limit = interval.limit
+                symbol,
+                interval.apiValue,
+                interval.limit
             )) {
 
                 is Response.Success -> {
+
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            chartPrices = response.data
+                            chartPoints = response.data
                         )
                     }
+
+                    startLiveAppendLoop()
                 }
 
                 is Response.Error -> {
@@ -99,12 +105,48 @@ class ChartViewModel @Inject constructor(
 
                 if (update.symbol == currentSymbol) {
 
+                    latestLivePrice = update.currentPrice
+
                     _uiState.update {
                         it.copy(
                             livePrice = update.currentPrice,
-                            isPositive24h = update.isPositive24h,
+                            isPositive24h = update.isPositive24h
                         )
                     }
+                }
+            }
+        }
+    }
+
+    private fun startLiveAppendLoop() {
+
+        chartJob = viewModelScope.launch {
+
+            while (isActive) {
+
+                delay(_uiState.value.selectedInterval.updateMillis)
+
+                val price = latestLivePrice ?: continue
+
+                _uiState.update { state ->
+
+                    val updated = state.chartPoints
+                        .toMutableList()
+                        .apply {
+
+                            add(
+                                ChartPoint(
+                                    time = System.currentTimeMillis(),
+                                    price = price
+                                )
+                            )
+
+                            if (size > state.selectedInterval.limit) {
+                                removeAt(0)
+                            }
+                        }
+
+                    state.copy(chartPoints = updated)
                 }
             }
         }

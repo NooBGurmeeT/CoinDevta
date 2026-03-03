@@ -1,5 +1,6 @@
 package com.gurmeet.coindevta.domain.repository
 
+import com.gurmeet.coindevta.presentation.chart.ChartPoint
 import com.gurmeet.coindevta.util.Response
 
 interface ChartRepository {
@@ -7,5 +8,5 @@ interface ChartRepository {
         symbol: String,
         interval: String,
         limit: Int
-    ): Response<List<Double>>
+    ): Response<List<ChartPoint>>
 }

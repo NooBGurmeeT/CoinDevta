@@ -96,6 +96,8 @@ dependencies {
     // DataStore (Widget bridge)
     implementation(libs.androidx.datastore.preferences)
 
+    implementation(libs.androidx.window)
+
     // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
