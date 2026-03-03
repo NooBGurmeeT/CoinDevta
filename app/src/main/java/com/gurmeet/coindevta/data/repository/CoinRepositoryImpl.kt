@@ -8,21 +8,32 @@ import com.gurmeet.coindevta.data.remote.websocket.BinanceSocketManager
 import com.gurmeet.coindevta.domain.model.Coin
 import com.gurmeet.coindevta.domain.model.TickerUpdate
 import com.gurmeet.coindevta.domain.repository.CoinRepository
+import com.gurmeet.coindevta.logger.ErrorLogger
+import com.gurmeet.coindevta.logger.LogLevel
 import com.gurmeet.coindevta.util.Response
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import javax.inject.Inject
 
+/**
+ * Repository that coordinates REST API, WebSocket stream,
+ * and local database for coin data.
+ */
 class CoinRepositoryImpl @Inject constructor(
     private val api: BinanceApi,
     private val dao: CoinDao,
     private val socketManager: BinanceSocketManager,
+    private val errorLogger: ErrorLogger
 ) : CoinRepository {
 
-    // ---------------------------------------------------------
-    // 1️⃣ Initial Data Load
-    // ---------------------------------------------------------
+    companion object {
+        private const val TAG = "CoinRepositoryImpl"
+    }
 
+    /**
+     * Fetches coins from API, merges with existing DB flags,
+     * and stores them locally.
+     */
     override suspend fun loadInitialData(): Response<Unit> {
         return try {
 
@@ -46,14 +57,21 @@ class CoinRepositoryImpl @Inject constructor(
             Response.Success(Unit)
 
         } catch (e: Exception) {
+
+            errorLogger.log(
+                tag = TAG,
+                message = "Initial data load failed",
+                level = LogLevel.ERROR,
+                throwable = e
+            )
+
             Response.Error("Initial load failed", e)
         }
     }
 
-    // ---------------------------------------------------------
-    // 2️⃣ Observe Static DB Data
-    // ---------------------------------------------------------
-
+    /**
+     * Observes coin list from database and maps to domain model.
+     */
     override fun observeCoins(): Flow<List<Coin>> {
         return dao.observeCoins()
             .map { list -> list.map { it.toDomain() } }
@@ -61,10 +79,9 @@ class CoinRepositoryImpl @Inject constructor(
             .flowOn(Dispatchers.IO)
     }
 
-    // ---------------------------------------------------------
-    // 3️⃣ Live WebSocket Prices (NO DB WRITE)
-    // ---------------------------------------------------------
-
+    /**
+     * Streams live ticker updates without writing to database.
+     */
     override fun observeLivePrices(): Flow<TickerUpdate> {
         return socketManager.observeAllPrices()
             .buffer(capacity = 5000)
@@ -72,10 +89,9 @@ class CoinRepositoryImpl @Inject constructor(
             .flowOn(Dispatchers.IO)
     }
 
-    // ---------------------------------------------------------
-    // 4️⃣ Periodic REST Sync (Static Updates Only)
-    // ---------------------------------------------------------
-
+    /**
+     * Periodically refreshes static market data via REST API.
+     */
     override suspend fun syncPrices(): Response<Unit> {
         return try {
 
@@ -94,13 +110,17 @@ class CoinRepositoryImpl @Inject constructor(
             Response.Success(Unit)
 
         } catch (e: Exception) {
+
+            errorLogger.log(
+                tag = TAG,
+                message = "Price sync failed",
+                level = LogLevel.ERROR,
+                throwable = e
+            )
+
             Response.Error("Sync failed", e)
         }
     }
-
-    // ---------------------------------------------------------
-    // 5️⃣ Favorites / Pin
-    // ---------------------------------------------------------
 
     override suspend fun toggleFavorite(symbol: String) {
         dao.toggleFavorite(symbol)

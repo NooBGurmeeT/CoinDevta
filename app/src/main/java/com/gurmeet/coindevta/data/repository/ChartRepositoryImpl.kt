@@ -2,13 +2,29 @@ package com.gurmeet.coindevta.data.repository
 
 import com.gurmeet.coindevta.data.remote.api.BinanceApi
 import com.gurmeet.coindevta.domain.repository.ChartRepository
+import com.gurmeet.coindevta.logger.ErrorLogger
+import com.gurmeet.coindevta.logger.LogLevel
 import com.gurmeet.coindevta.presentation.chart.ChartPoint
 import com.gurmeet.coindevta.util.Response
 import javax.inject.Inject
 
+/**
+ * Repository implementation responsible for fetching and mapping
+ * Binance kline data into ChartPoint domain model.
+ */
 class ChartRepositoryImpl @Inject constructor(
-    private val api: BinanceApi
+    private val api: BinanceApi,
+    private val errorLogger: ErrorLogger
 ) : ChartRepository {
+
+    companion object {
+        private const val TAG = "ChartRepositoryImpl"
+    }
+
+    /**
+     * Fetches historical chart data and maps raw kline response
+     * into strongly typed ChartPoint list.
+     */
     override suspend fun getChart(
         symbol: String,
         interval: String,
@@ -19,6 +35,7 @@ class ChartRepositoryImpl @Inject constructor(
 
             val klines = api.getKlines(symbol, interval, limit)
 
+            // Maps raw API response into ChartPoint model
             val points = klines.map {
 
                 val time = when (val value = it[0]) {
@@ -43,7 +60,14 @@ class ChartRepositoryImpl @Inject constructor(
             Response.Success(points)
 
         } catch (e: Exception) {
-            e.printStackTrace()
+
+            errorLogger.log(
+                tag = TAG,
+                message = "Failed to fetch chart data for $symbol",
+                level = LogLevel.ERROR,
+                throwable = e
+            )
+
             Response.Error(e.message ?: "Chart fetch failed", e)
         }
     }

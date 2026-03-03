@@ -2,8 +2,13 @@ package com.gurmeet.coindevta.presentation.chart
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.gurmeet.coindevta.analytics.AnalyticsConstants
+import com.gurmeet.coindevta.analytics.AnalyticsEvent
+import com.gurmeet.coindevta.analytics.AnalyticsLogger
 import com.gurmeet.coindevta.domain.usecase.GetChartUseCase
 import com.gurmeet.coindevta.domain.usecase.ObserveLivePricesUseCase
+import com.gurmeet.coindevta.logger.ErrorLogger
+import com.gurmeet.coindevta.logger.LogLevel
 import com.gurmeet.coindevta.util.Response
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.*
@@ -15,8 +20,14 @@ import javax.inject.Inject
 @HiltViewModel
 class ChartViewModel @Inject constructor(
     private val getChartUseCase: GetChartUseCase,
-    private val observeLivePricesUseCase: ObserveLivePricesUseCase
+    private val observeLivePricesUseCase: ObserveLivePricesUseCase,
+    private val analyticsLogger: AnalyticsLogger,
+    private val errorLogger: ErrorLogger
 ) : ViewModel() {
+
+    companion object {
+        private const val TAG = "ChartViewModel"
+    }
 
     private val _uiState = MutableStateFlow(ChartUiState())
     val uiState: StateFlow<ChartUiState> = _uiState
@@ -28,6 +39,9 @@ class ChartViewModel @Inject constructor(
     private var latestLivePrice: Double? = null
     private var chartJob: Job? = null
 
+    /**
+     * Sets initial data passed from previous screen.
+     */
     fun setInitialData(
         symbol: String,
         latestPrice: Double,
@@ -45,8 +59,19 @@ class ChartViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Initializes chart loading and live price observation.
+     */
     fun initialize() {
         if (currentSymbol.isBlank()) return
+
+        analyticsLogger.track(
+            AnalyticsEvent(
+                AnalyticsConstants.Chart.SCREEN_OPENED,
+                mapOf(AnalyticsConstants.Chart.PARAM_SYMBOL to currentSymbol)
+            )
+        )
+
         loadChart(currentSymbol, ChartInterval.HOUR)
         observeLivePrices()
     }
@@ -54,6 +79,16 @@ class ChartViewModel @Inject constructor(
     fun loadChart(symbol: String, interval: ChartInterval) {
 
         chartJob?.cancel()
+
+        analyticsLogger.track(
+            AnalyticsEvent(
+                AnalyticsConstants.Chart.INTERVAL_SELECTED,
+                mapOf(
+                    AnalyticsConstants.Chart.PARAM_SYMBOL to symbol,
+                    AnalyticsConstants.Chart.PARAM_INTERVAL to interval.name
+                )
+            )
+        )
 
         viewModelScope.launch {
 
@@ -84,6 +119,14 @@ class ChartViewModel @Inject constructor(
                 }
 
                 is Response.Error -> {
+
+                    errorLogger.log(
+                        tag = TAG,
+                        message = "Chart load failed for $symbol",
+                        level = LogLevel.ERROR,
+                        throwable = response.throwable
+                    )
+
                     _uiState.update {
                         it.copy(
                             isLoading = false,
@@ -118,6 +161,9 @@ class ChartViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Periodically appends latest live price to chart.
+     */
     private fun startLiveAppendLoop() {
 
         chartJob = viewModelScope.launch {

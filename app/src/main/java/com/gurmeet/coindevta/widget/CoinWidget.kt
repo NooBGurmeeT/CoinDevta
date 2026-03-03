@@ -23,16 +23,35 @@ import androidx.glance.state.PreferencesGlanceStateDefinition
 import com.gurmeet.coindevta.MainActivity
 import org.json.JSONObject
 
+/**
+ * Glance AppWidget displaying favorite coin prices.
+ *
+ * Reads price data from DataStore preferences and renders
+ * live updates with connection state handling.
+ */
 class CoinWidget : GlanceAppWidget() {
 
     companion object {
+
+        private const val TAG = "CoinWidget"
+
+        // JSON string storing symbol -> price mapping
         val PricesKey = stringPreferencesKey("prices_json")
+
+        // Indicates whether WebSocket connection is active
         val ConnectionKey = booleanPreferencesKey("connection_state")
     }
 
     override val stateDefinition = PreferencesGlanceStateDefinition
 
-    override suspend fun provideGlance(context: Context, id: GlanceId) {
+    /**
+     * Entry point for rendering widget content.
+     * Reads stored preferences and builds UI.
+     */
+    override suspend fun provideGlance(
+        context: Context,
+        id: GlanceId
+    ) {
 
         provideContent {
 
@@ -55,6 +74,12 @@ class CoinWidget : GlanceAppWidget() {
         }
     }
 
+    /**
+     * Main widget UI layout.
+     *
+     * @param prices JSON object containing symbol-price pairs
+     * @param connected Whether WebSocket connection is active
+     */
     @Composable
     private fun WidgetContent(
         context: Context,
@@ -69,6 +94,7 @@ class CoinWidget : GlanceAppWidget() {
                 .padding(16.dp)
         ) {
 
+            // Header navigates to MainActivity
             Text(
                 text = "★ Favorite Coins",
                 modifier = GlanceModifier.clickable(
@@ -85,6 +111,7 @@ class CoinWidget : GlanceAppWidget() {
 
             Spacer(GlanceModifier.height(12.dp))
 
+            // Shows disconnected state
             if (!connected) {
 
                 Text(
@@ -105,6 +132,7 @@ class CoinWidget : GlanceAppWidget() {
                 return@Column
             }
 
+            // Shows loading state
             if (prices.length() == 0) {
 
                 Text(
@@ -119,6 +147,7 @@ class CoinWidget : GlanceAppWidget() {
 
             val entries = prices.keys().asSequence().toList()
 
+            // Scrollable price list
             LazyColumn(
                 modifier = GlanceModifier.defaultWeight()
             ) {
@@ -155,8 +184,7 @@ class CoinWidget : GlanceAppWidget() {
                         Text(
                             text = symbol,
                             style = TextStyle(
-                                color =
-                                    ColorProvider(Color(0xFFE2E8F0)),
+                                color = ColorProvider(Color(0xFFE2E8F0)),
                                 fontWeight = FontWeight.Medium
                             )
                         )
@@ -178,6 +206,7 @@ class CoinWidget : GlanceAppWidget() {
 
             Spacer(GlanceModifier.height(12.dp))
 
+            // Footer showing refresh indicator
             Text(
                 text = "Live • 5-6 sec refresh",
                 style = TextStyle(

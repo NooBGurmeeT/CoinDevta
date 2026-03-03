@@ -2,21 +2,27 @@ package com.gurmeet.coindevta.presentation.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.gurmeet.coindevta.analytics.AnalyticsConstants
+import com.gurmeet.coindevta.analytics.AnalyticsEvent
+import com.gurmeet.coindevta.analytics.AnalyticsLogger
 import com.gurmeet.coindevta.domain.model.TickerUpdate
 import com.gurmeet.coindevta.domain.usecase.*
+import com.gurmeet.coindevta.logger.ErrorLogger
+import com.gurmeet.coindevta.logger.LogLevel
 import com.gurmeet.coindevta.util.Response
 import com.gurmeet.coindevta.util.windowedByTime
 import com.gurmeet.coindevta.widget.WidgetSyncManager
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/**
+ * ViewModel responsible for managing Home screen state,
+ * combining database data, websocket updates, sorting,
+ * searching and handling all user actions.
+ */
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val loadInitialData: LoadInitialDataUseCase,
@@ -26,8 +32,14 @@ class HomeViewModel @Inject constructor(
     private val toggleFavoriteUseCase: ToggleFavoriteUseCase,
     private val pinCoinUseCase: PinCoinUseCase,
     private val unPinCoinUseCase: UnPinCoinUseCase,
-    private val widgetSyncManager: WidgetSyncManager
+    private val widgetSyncManager: WidgetSyncManager,
+    private val analyticsLogger: AnalyticsLogger,
+    private val errorLogger: ErrorLogger
 ) : ViewModel() {
+
+    companion object {
+        private const val TAG = "HomeViewModel"
+    }
 
     private val searchQuery = MutableStateFlow("")
     private val sortType = MutableStateFlow(SortType.MARKET_CAP_DESC)
@@ -37,16 +49,18 @@ class HomeViewModel @Inject constructor(
     val effect = _effect.asSharedFlow()
 
     private val baseCoinsFlow =
-        observeCoinsUseCase()
-            .distinctUntilChanged()
+        observeCoinsUseCase().distinctUntilChanged()
 
+    /**
+     * Public UI state combining:
+     * - Database coin list
+     * - Search query
+     * - Sorting type
+     * - UI flags (loading, bottom sheet, etc.)
+     */
     val state: StateFlow<HomeScreenState> =
-        combine(
-            baseCoinsFlow,
-            searchQuery,
-            sortType,
-            uiFlags
-        ) { coins, query, sort, flags ->
+        combine(baseCoinsFlow, searchQuery, sortType, uiFlags)
+        { coins, query, sort, flags ->
 
             val filtered =
                 if (query.isBlank()) coins
@@ -78,26 +92,50 @@ class HomeViewModel @Inject constructor(
         loadData()
         observeLivePrices()
         startPeriodicSync()
+
+        analyticsLogger.track(
+            AnalyticsEvent(AnalyticsConstants.Home.SCREEN_OPENED)
+        )
     }
 
+    /**
+     * Loads initial coin data from remote API
+     * and updates loading and error states accordingly.
+     */
     private fun loadData() {
         viewModelScope.launch {
+
             uiFlags.update { it.copy(isLoading = true) }
 
             when (val result = loadInitialData()) {
+
                 is Response.Success ->
                     uiFlags.update { it.copy(isLoading = false) }
 
-                is Response.Error ->
+                is Response.Error -> {
+
+                    errorLogger.log(
+                        TAG,
+                        "Initial load failed",
+                        LogLevel.ERROR,
+                        result.throwable
+                    )
+
                     uiFlags.update {
                         it.copy(isLoading = false, error = result.message)
                     }
+                }
 
                 else -> {}
             }
         }
     }
 
+    /**
+     * Collects websocket price updates,
+     * batches them every 1 second,
+     * and updates only the latest value per symbol.
+     */
     @OptIn(FlowPreview::class)
     private fun observeLivePrices() {
 
@@ -109,7 +147,6 @@ class HomeViewModel @Inject constructor(
                     onBufferOverflow = BufferOverflow.DROP_OLDEST
                 )
 
-            // 1️⃣ Collect raw websocket stream
             launch {
                 observeLivePricesUseCase()
                     .collect { update ->
@@ -117,7 +154,6 @@ class HomeViewModel @Inject constructor(
                     }
             }
 
-            // 2️⃣ Batch every 1 second
             socketUpdates
                 .buffer()
                 .windowedByTime(1000L)
@@ -126,8 +162,7 @@ class HomeViewModel @Inject constructor(
                     if (batch.isNotEmpty()) {
 
                         val latestPerSymbol =
-                            batch
-                                .groupBy { it.symbol }
+                            batch.groupBy { it.symbol }
                                 .mapValues { entry ->
                                     entry.value.last()
                                 }
@@ -143,15 +178,36 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Performs periodic REST sync every 60 seconds
+     * to update static market data.
+     */
     private fun startPeriodicSync() {
         viewModelScope.launch(Dispatchers.IO) {
             while (isActive) {
                 delay(60_000)
-                syncPricesUseCase()
+
+                try {
+                    syncPricesUseCase()
+                } catch (e: Exception) {
+                    errorLogger.log(
+                        TAG,
+                        "Periodic sync failed",
+                        LogLevel.ERROR,
+                        e
+                    )
+                }
             }
         }
     }
 
+    /**
+     * Handles all user actions from UI.
+     *
+     * @param action Represents user interaction such as
+     * toggling favorite, pinning coin, searching, sorting,
+     * navigation and foldable state changes.
+     */
     fun onAction(action: HomeAction) {
 
         when (action) {
@@ -160,18 +216,42 @@ class HomeViewModel @Inject constructor(
                 viewModelScope.launch {
                     toggleFavoriteUseCase(action.symbol)
                     widgetSyncManager.syncFavorites()
+
+                    analyticsLogger.track(
+                        AnalyticsEvent(
+                            AnalyticsConstants.Home.FAVORITE_TOGGLED,
+                            mapOf(
+                                AnalyticsConstants.Home.PARAM_SYMBOL to action.symbol
+                            )
+                        )
+                    )
                 }
 
             is HomeAction.PinCoin ->
                 viewModelScope.launch {
                     pinCoinUseCase(action.symbol)
                     _effect.emit(HomeEffect.StartPinnedService)
+
+                    analyticsLogger.track(
+                        AnalyticsEvent(
+                            AnalyticsConstants.Home.COIN_PINNED,
+                            mapOf(
+                                AnalyticsConstants.Home.PARAM_SYMBOL to action.symbol
+                            )
+                        )
+                    )
                 }
 
             HomeAction.UnPinCoin ->
                 viewModelScope.launch {
                     unPinCoinUseCase()
                     _effect.emit(HomeEffect.StopPinnedService)
+
+                    analyticsLogger.track(
+                        AnalyticsEvent(
+                            AnalyticsConstants.Home.COIN_UNPINNED
+                        )
+                    )
                 }
 
             is HomeAction.SearchChanged ->
@@ -196,6 +276,16 @@ class HomeViewModel @Inject constructor(
 
             is HomeAction.CoinClick ->
                 viewModelScope.launch {
+
+                    analyticsLogger.track(
+                        AnalyticsEvent(
+                            AnalyticsConstants.Home.COIN_CLICKED,
+                            mapOf(
+                                AnalyticsConstants.Home.PARAM_SYMBOL to action.symbol
+                            )
+                        )
+                    )
+
                     _effect.emit(
                         HomeEffect.NavigateToChart(action.symbol)
                     )

@@ -7,6 +7,7 @@ import com.gurmeet.coindevta.data.repository.ChartRepositoryImpl
 import com.gurmeet.coindevta.data.repository.CoinRepositoryImpl
 import com.gurmeet.coindevta.domain.repository.ChartRepository
 import com.gurmeet.coindevta.domain.repository.CoinRepository
+import com.gurmeet.coindevta.logger.ErrorLogger
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -22,12 +23,14 @@ object RepositoryModule {
     fun provideCoinRepository(
         api: BinanceApi,
         dao: CoinDao,
-        socketManager: BinanceSocketManager
+        socketManager: BinanceSocketManager,
+        errorLogger: ErrorLogger
     ): CoinRepository {
         return CoinRepositoryImpl(
             api,
             dao,
-            socketManager
+            socketManager,
+            errorLogger
         )
     }
 
@@ -35,9 +38,11 @@ object RepositoryModule {
     @Singleton
     fun provideChartRepository(
         api: BinanceApi,
+        errorLogger: ErrorLogger,
     ): ChartRepository {
         return ChartRepositoryImpl(
-            api
+            api,
+            errorLogger
         )
     }
 }

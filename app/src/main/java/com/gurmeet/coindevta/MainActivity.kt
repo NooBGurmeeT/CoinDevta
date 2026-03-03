@@ -1,12 +1,10 @@
 package com.gurmeet.coindevta
 
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.annotation.RequiresApi
 import androidx.compose.material3.windowsizeclass.*
 import androidx.compose.runtime.*
 import androidx.lifecycle.lifecycleScope
@@ -19,15 +17,25 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
+import com.gurmeet.coindevta.analytics.AnalyticsConstants
+import com.gurmeet.coindevta.analytics.AnalyticsEvent
+import com.gurmeet.coindevta.analytics.AnalyticsLogger
+import javax.inject.Inject
 
+@OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     private val viewModel: HomeViewModel by viewModels()
+    @Inject
+    lateinit var analyticsLogger: AnalyticsLogger
 
-    @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        analyticsLogger.track(
+            AnalyticsEvent(AnalyticsConstants.Main.ACTIVITY_OPENED)
+        )
         setContent {
 
             val windowSizeClass = calculateWindowSizeClass(this)
@@ -129,14 +137,14 @@ class MainActivity : ComponentActivity() {
         startActivity(intent)
     }
 
-    @RequiresApi(Build.VERSION_CODES.O)
+
     private fun startWidgetService() {
         val intent = Intent(this, CoinWidgetService::class.java)
         startForegroundService(intent)
     }
 
-    @RequiresApi(Build.VERSION_CODES.O)
-    private fun startPinnedPriceService(){
+
+    private fun startPinnedPriceService() {
         val intent = Intent(
             this@MainActivity,
             PinnedPriceService::class.java

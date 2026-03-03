@@ -14,13 +14,14 @@ import androidx.compose.ui.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.*
 import com.gurmeet.coindevta.domain.model.Coin
 import com.gurmeet.coindevta.domain.model.TickerUpdate
 
 @OptIn(ExperimentalMaterial3Api::class)
 class HomeScreenUi {
-
+    // Main home screen layout handling foldable and standard device modes
     @Composable
     fun LayUi(
         state: HomeScreenState,
@@ -121,6 +122,8 @@ class HomeScreenUi {
         }
     }
 
+
+    // Displays scrollable list of all coins
     @Composable
     private fun CoinListSection(
         state: HomeScreenState,
@@ -148,12 +151,13 @@ class HomeScreenUi {
         }
     }
 
+
+    // Bottom sheet used to select sorting type
     @Composable
     private fun SortBottomSheet(
         state: HomeScreenState,
         onAction: (HomeAction) -> Unit
     ) {
-
         ModalBottomSheet(
             onDismissRequest = {
                 onAction(HomeAction.CloseFilter)
@@ -247,13 +251,14 @@ class HomeScreenUi {
         }
     }
 
+
+    // Single row representing a sorting option
     @Composable
     private fun SortItem(
         title: String,
         selected: Boolean,
         onClick: () -> Unit
     ) {
-
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -289,6 +294,8 @@ class HomeScreenUi {
         }
     }
 
+
+    // Confirmation bottom sheet for pin or unpin action
     @Composable
     private fun PinConfirmationSheet(
         coin: Coin,
@@ -297,7 +304,6 @@ class HomeScreenUi {
         onUnPin: () -> Unit,
         onDismiss: () -> Unit
     ) {
-
         val isSameCoinPinned =
             alreadyPinned?.symbol == coin.symbol
 
@@ -384,6 +390,7 @@ class HomeScreenUi {
         }
     }
 
+    // Card representing a single coin row
     @Composable
     private fun CoinItemCard(
         coin: Coin,
@@ -392,7 +399,6 @@ class HomeScreenUi {
         onAction: (HomeAction) -> Unit,
         onLongHold: (Coin) -> Unit
     ) {
-
         val displayPrice = ticker?.currentPrice ?: coin.price
         val isPositive = ticker?.isPositive24h ?: true
 
@@ -492,12 +498,12 @@ class HomeScreenUi {
         }
     }
 
+    // Search input field with filter icon
     @Composable
     private fun SearchBarSection(
         state: HomeScreenState,
         onAction: (HomeAction) -> Unit
     ) {
-
         Card(
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -667,6 +673,7 @@ class HomeScreenUi {
         }
     }
 
+    // Expanded right-side layout for tablet/foldable mode
     @Composable
     private fun ExpandedRightSection(
         favorites: List<Coin>,
@@ -675,7 +682,6 @@ class HomeScreenUi {
         onAction: (HomeAction) -> Unit,
         modifier: Modifier = Modifier
     ) {
-
         Card(
             modifier = modifier
                 .fillMaxHeight()
@@ -825,6 +831,196 @@ class HomeScreenUi {
                                 color = priceColor,
                                 fontWeight = FontWeight.Medium
                             )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+    // Preview for full Home screen (phone mode)
+    @Preview(showBackground = true, widthDp = 400, heightDp = 800)
+    @Composable
+    private fun PreviewHomeScreen() {
+
+        val sampleCoins = listOf(
+            Coin("Bitcoin", "BTCUSDT", 65000.0, 0.0, 0.0, true, false),
+            Coin("Ethereum", "ETHUSDT", 3500.0, 0.0, 0.0, false, true),
+            Coin("Solana", "SOLUSDT", 120.0, 0.0, 0.0, false, false)
+        )
+
+        val state = HomeScreenState(
+            coins = sampleCoins,
+            tickerMap = emptyMap()
+        )
+
+        HomeScreenUi().LayUi(
+            state = state,
+            onAction = {}
+        )
+    }
+
+    // Preview for Coin Item Card
+    @Preview(showBackground = true)
+    @Composable
+    private fun PreviewCoinItemCard() {
+
+        val coin = Coin(
+            name = "Bitcoin",
+            symbol = "BTCUSDT",
+            price = 65000.0,
+            marketCap = 0.0,
+            changePercent24h = 0.0,
+            isFavorite = true,
+            isPinned = false
+        )
+
+        HomeScreenUi().apply {
+            CoinItemCard(
+                coin = coin,
+                ticker = null,
+                isPinned = false,
+                onAction = {},
+                onLongHold = {}
+            )
+        }
+    }
+
+    // Preview for Favorite Section
+    @Preview(showBackground = true)
+    @Composable
+    private fun PreviewFavoriteSection() {
+
+        val favorites = listOf(
+            Coin("Bitcoin", "BTCUSDT", 65000.0, 0.0, 0.0, true, false),
+            Coin("Ethereum", "ETHUSDT", 3500.0, 0.0, 0.0, true, false)
+        )
+
+        val state = HomeScreenState(
+            coins = favorites,
+            isExpandedFavorites = true,
+            tickerMap = emptyMap()
+        )
+
+        HomeScreenUi().apply {
+            FavoriteSection(
+                favorites = favorites,
+                state = state,
+                onAction = {}
+            )
+        }
+    }
+
+    // Preview for Sort Bottom Sheet
+    @Preview(showBackground = true)
+    @Composable
+    private fun PreviewSortBottomSheet() {
+
+        val state = HomeScreenState(
+            coins = emptyList(),
+            selectedSort = SortType.MARKET_CAP_ASC,
+            isBottomSheetOpen = true
+        )
+
+        MaterialTheme {
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp).
+                background(Color.White),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+
+                Column(
+                    modifier = Modifier.padding(24.dp)
+                ) {
+
+                    Text(
+                        text = "Sort By",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    )
+
+                    Spacer(Modifier.height(20.dp))
+
+                    HomeScreenUi().apply {
+                        SortItem(
+                            title = "Market Cap ↑",
+                            selected = true,
+                            onClick = {}
+                        )
+
+                        SortItem(
+                            title = "Market Cap ↓",
+                            selected = false,
+                            onClick = {}
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // Preview for Pin Confirmation Sheet
+    @Preview(showBackground = true)
+    @Composable
+    private fun PreviewPinConfirmationSheet() {
+
+        val coin = Coin(
+            name = "Bitcoin",
+            symbol = "BTCUSDT",
+            price = 65000.0,
+            marketCap = 0.0,
+            changePercent24h = 0.0,
+            isFavorite = false,
+            isPinned = false
+        )
+
+        MaterialTheme {
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+
+                Column(
+                    modifier = Modifier.padding(24.dp)
+                ) {
+
+                    Text(
+                        text = "Pin ${coin.name}?",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    )
+
+                    Spacer(Modifier.height(16.dp))
+
+                    Text(
+                        text = "This coin will show live price updates in notification.",
+                        color = Color(0xFF667085)
+                    )
+
+                    Spacer(Modifier.height(28.dp))
+
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+
+                        TextButton(onClick = {}) {
+                            Text("Cancel")
+                        }
+
+                        Spacer(Modifier.width(12.dp))
+
+                        Button(onClick = {}) {
+                            Text("Confirm")
                         }
                     }
                 }

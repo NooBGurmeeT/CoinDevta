@@ -16,12 +16,14 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.text.SimpleDateFormat
 import java.util.*
 
 class ChartScreenUi {
+
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     fun LayoutUI(
@@ -36,19 +38,20 @@ class ChartScreenUi {
         val useTwoPaneLayout = isTabletWidth || isFoldExpanded
 
         Scaffold(
+            containerColor = Color(0xFFF8FAFC),
             topBar = {
                 TopAppBar(
                     title = {
                         Text(
                             symbol.replace("USDT", ""),
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.SemiBold
                         )
                     },
                     navigationIcon = {
                         IconButton(
                             onClick = { onEvent(ChartUiEvent.OnBackClicked) }
                         ) {
-                            Icon(Icons.Default.ArrowBack, null)
+                            Icon(Icons.Default.ArrowBack, contentDescription = null)
                         }
                     }
                 )
@@ -57,18 +60,24 @@ class ChartScreenUi {
 
             if (!useTwoPaneLayout) {
 
-                // 📱 PHONE — FULL SCREEN SCROLL
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding)
                         .verticalScroll(rememberScrollState())
-                        .padding(16.dp)
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
 
                     PriceHeaderCard(symbol, state.livePrice, state.isPositive24h)
 
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Text(
+                        text = "Select Duration",
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        color = Color(0xFF475569)
+                    )
 
                     IntervalSelector(
                         selected = state.selectedInterval,
@@ -77,31 +86,42 @@ class ChartScreenUi {
                         }
                     )
 
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Text(
+                        text = "Live Chart",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    )
 
                     ChartContent(state)
                 }
 
             } else {
 
-                // 📖 TABLET / FOLDABLE OPEN
                 Row(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding)
-                        .padding(16.dp)
+                        .padding(20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(28.dp)
                 ) {
 
-                    // LEFT SIDE SCROLLABLE
                     Column(
                         modifier = Modifier
                             .weight(0.4f)
-                            .verticalScroll(rememberScrollState())
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(20.dp)
                     ) {
 
                         PriceHeaderCard(symbol, state.livePrice, state.isPositive24h)
 
-                        Spacer(modifier = Modifier.height(20.dp))
+                        Text(
+                            text = "Select Duration",
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            color = Color(0xFF475569)
+                        )
 
                         IntervalSelector(
                             selected = state.selectedInterval,
@@ -111,14 +131,20 @@ class ChartScreenUi {
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(24.dp))
-
-                    // RIGHT SIDE SCROLLABLE
                     Column(
                         modifier = Modifier
                             .weight(0.6f)
-                            .verticalScroll(rememberScrollState())
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
+
+                        Text(
+                            text = "Live Chart",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        )
+
                         ChartContent(state)
                     }
                 }
@@ -131,17 +157,29 @@ class ChartScreenUi {
 
         when {
             state.isLoading -> {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(280.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     CircularProgressIndicator()
                 }
             }
 
             state.error != null -> {
-                Text(state.error, color = Color.Red)
+                Text(
+                    state.error,
+                    color = Color(0xFFDC2626),
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
 
             else -> {
-                ChartCard(state.chartPoints)
+                ChartCard(
+                    points = state.chartPoints,
+                    interval = state.selectedInterval
+                )
             }
         }
     }
@@ -154,26 +192,34 @@ class ChartScreenUi {
     ) {
 
         val color =
-            if (isPositive24h) Color(0xFF22C55E)
-            else Color(0xFFEF4444)
+            if (isPositive24h) Color(0xFF16A34A)
+            else Color(0xFFDC2626)
 
         Card(
-            shape = RoundedCornerShape(20.dp),
-            modifier = Modifier.fillMaxWidth()
+            shape = RoundedCornerShape(24.dp),
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(2.dp)
         ) {
-            Column(Modifier.padding(20.dp)) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp)
+            ) {
 
                 Text(
                     text = symbol.replace("USDT", ""),
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF1E293B)
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
                     text = "$ %.4f".format(price),
-                    fontSize = 26.sp,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
                     color = color
                 )
             }
@@ -188,65 +234,88 @@ class ChartScreenUi {
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
 
             ChartInterval.values().forEach { interval ->
 
                 val selectedColor =
-                    if (interval == selected) Color(0xFF2ECC71)
-                    else Color.LightGray
+                    if (interval == selected)
+                        Color(0xFF16A34A)
+                    else
+                        Color(0xFFE2E8F0)
+
+                val textColor =
+                    if (interval == selected)
+                        Color.White
+                    else
+                        Color(0xFF475569)
 
                 Button(
                     onClick = { onSelected(interval) },
+                    shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = selectedColor
-                    )
+                    ),
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Text(interval.name)
+                    Text(
+                        interval.name,
+                        color = textColor,
+                        fontSize = 12.sp
+                    )
                 }
             }
         }
     }
 
     @Composable
-    private fun ChartCard(points: List<ChartPoint>) {
+    private fun ChartCard(
+        points: List<ChartPoint>,
+        interval: ChartInterval
+    ) {
 
         Card(
-            shape = RoundedCornerShape(20.dp),
-            modifier = Modifier.fillMaxSize()
+            shape = RoundedCornerShape(24.dp),
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(2.dp)
         ) {
-
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp)
+                    .fillMaxWidth()
+                    .padding(20.dp)
             ) {
-                LineChart(points)
+                LineChart(points, interval)
             }
         }
     }
+
     @Composable
-    private fun LineChart(points: List<ChartPoint>) {
+    private fun LineChart(
+        points: List<ChartPoint>,
+        interval: ChartInterval
+    ) {
 
         if (points.size < 2) {
             Text("No chart data")
             return
         }
 
+        val configuration = LocalConfiguration.current
+        val graphHeight = configuration.screenHeightDp.dp * 0.35f
+
         val prices = points.map { it.price }
         val max = prices.maxOrNull() ?: return
         val min = prices.minOrNull() ?: return
         val range = (max - min).takeIf { it != 0.0 } ?: 1.0
 
-        Column(
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        Column(Modifier.fillMaxWidth()) {
 
             Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(240.dp)
+                    .height(graphHeight)
             ) {
 
                 val stepX = size.width / (points.size - 1)
@@ -264,31 +333,86 @@ class ChartScreenUi {
 
                 drawPath(
                     path = path,
-                    color = Color(0xFF2ECC71),
-                    style = Stroke(width = 4f)
+                    color = Color(0xFF16A34A),
+                    style = Stroke(width = 5f)
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text("High: %.4f".format(max), fontSize = 12.sp)
-            Text("Low: %.4f".format(min), fontSize = 12.sp)
-
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(format(points.first().time), fontSize = 12.sp)
-                Text(format(points[points.size / 2].time), fontSize = 12.sp)
-                Text(format(points.last().time), fontSize = 12.sp)
+
+                Column {
+                    Text("High", fontSize = 11.sp, color = Color(0xFF64748B))
+                    Text("%.4f".format(max), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                }
+
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("Low", fontSize = 11.sp, color = Color(0xFF64748B))
+                    Text("%.4f".format(min), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Divider(color = Color(0xFFE2E8F0))
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(format(points.first().time, interval), fontSize = 11.sp, color = Color(0xFF64748B))
+                Text(format(points[points.size / 2].time, interval), fontSize = 11.sp, color = Color(0xFF64748B))
+                Text(format(points.last().time, interval), fontSize = 11.sp, color = Color(0xFF64748B))
             }
         }
     }
 
-    private fun format(time: Long): String {
-        val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-        return sdf.format(Date(time))
+    private fun format(
+        time: Long,
+        interval: ChartInterval
+    ): String {
+
+        val date = Date(time)
+
+        return when (interval) {
+
+            ChartInterval.HOUR,
+            ChartInterval.DAY ->
+                SimpleDateFormat("HH:mm", Locale.getDefault()).format(date)
+
+            ChartInterval.MONTH ->
+                SimpleDateFormat("dd MMM", Locale.getDefault()).format(date)
+
+            else ->
+                SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(date)
+        }
     }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun PreviewChartContent() {
+    val samplePoints = listOf(
+        ChartPoint(System.currentTimeMillis() - 30000, 100.0),
+        ChartPoint(System.currentTimeMillis() - 20000, 120.0),
+        ChartPoint(System.currentTimeMillis() - 10000, 110.0),
+        ChartPoint(System.currentTimeMillis(), 130.0)
+    )
+
+    ChartScreenUi().LayoutUI(
+        symbol = "BTCUSDT",
+        state = ChartUiState(
+            chartPoints = samplePoints,
+            livePrice = 130.0,
+            isPositive24h = true
+        ),
+        isFoldExpanded = false,
+        onEvent = {}
+    )
 }

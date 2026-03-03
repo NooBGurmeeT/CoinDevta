@@ -8,14 +8,21 @@ import androidx.compose.runtime.*
 import androidx.lifecycle.lifecycleScope
 import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
+import com.gurmeet.coindevta.analytics.AnalyticsConstants
+import com.gurmeet.coindevta.analytics.AnalyticsEvent
+import com.gurmeet.coindevta.analytics.AnalyticsLogger
 import com.gurmeet.coindevta.ui.theme.CoinDevtaTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class ChartActivity : ComponentActivity() {
 
     private val viewModel: ChartViewModel by viewModels()
+
+    @Inject
+    lateinit var analyticsLogger: AnalyticsLogger
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -30,7 +37,6 @@ class ChartActivity : ComponentActivity() {
 
             var isFoldExpanded by remember { mutableStateOf(false) }
 
-            // Foldable detection
             LaunchedEffect(Unit) {
                 lifecycleScope.launch {
                     WindowInfoTracker.getOrCreate(this@ChartActivity)
@@ -66,8 +72,17 @@ class ChartActivity : ComponentActivity() {
                                     event.interval
                                 )
 
-                            ChartUiEvent.OnBackClicked ->
+                            ChartUiEvent.OnBackClicked -> {
+                                analyticsLogger.track(
+                                    AnalyticsEvent(
+                                        AnalyticsConstants.Chart.BACK_CLICKED,
+                                        mapOf(
+                                            AnalyticsConstants.Chart.PARAM_SYMBOL to viewModel.currentSymbol
+                                        )
+                                    )
+                                )
                                 finish()
+                            }
                         }
                     }
                 )

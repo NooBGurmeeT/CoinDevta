@@ -1,31 +1,38 @@
 package com.gurmeet.coindevta.data.remote.websocket
 
-import android.util.Log
 import com.gurmeet.coindevta.domain.model.TickerUpdate
+import com.gurmeet.coindevta.logger.ErrorLogger
+import com.gurmeet.coindevta.logger.LogLevel
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
 import okhttp3.*
-import okio.ByteString
 import org.json.JSONArray
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Maintains a single shared WebSocket connection to Binance mini ticker stream.
+ * Emits real-time ticker updates as a hot SharedFlow across the app.
+ */
 @Singleton
 class BinanceSocketManager @Inject constructor(
-    private val client: OkHttpClient
+    private val client: OkHttpClient,
+    private val errorLogger: ErrorLogger
 ) {
 
+    companion object {
+        private const val TAG = "BinanceSocketManager"
+    }
+
+    // IO scope used to keep socket alive independently
     private val scope =
         CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    // --------------------------------------------------
-    // Shared hot flow (single socket for entire app)
-    // --------------------------------------------------
-
+    // Shared hot flow so entire app uses one WebSocket connection
     private val sharedTickerFlow: SharedFlow<TickerUpdate> by lazy {
         createSocketFlow()
-            .buffer(capacity = 5000)
+            .buffer(capacity = 5000) // Prevents backpressure blocking
             .shareIn(
                 scope = scope,
                 started = SharingStarted.Eagerly,
@@ -33,17 +40,23 @@ class BinanceSocketManager @Inject constructor(
             )
     }
 
+    /**
+     * Exposes real-time ticker updates.
+     */
     fun observeAllPrices(): Flow<TickerUpdate> = sharedTickerFlow
 
-    // --------------------------------------------------
-    // Internal socket creator (auto reconnect)
-    // --------------------------------------------------
-
+    /**
+     * Creates WebSocket flow with automatic retry on failure.
+     */
     private fun createSocketFlow(): Flow<TickerUpdate> {
 
         return callbackFlow {
 
-            Log.d("Socket", "Creating WebSocket connection")
+            errorLogger.log(
+                tag = TAG,
+                message = "Creating WebSocket connection",
+                level = LogLevel.DEBUG
+            )
 
             val request = Request.Builder()
                 .url("wss://stream.binance.com:9443/ws/!miniTicker@arr")
@@ -51,13 +64,19 @@ class BinanceSocketManager @Inject constructor(
 
             val listener = object : WebSocketListener() {
 
+                // Called when socket connects successfully
                 override fun onOpen(
                     webSocket: WebSocket,
                     response: Response
                 ) {
-                    Log.d("Socket", "WebSocket connected")
+                    errorLogger.log(
+                        tag = TAG,
+                        message = "WebSocket connected",
+                        level = LogLevel.INFO
+                    )
                 }
 
+                // Receives ticker array and emits each update
                 override fun onMessage(
                     webSocket: WebSocket,
                     text: String
@@ -84,38 +103,67 @@ class BinanceSocketManager @Inject constructor(
                         }
 
                     } catch (e: Exception) {
-                        Log.e("Socket", "Parse error: ${e.message}")
+                        errorLogger.log(
+                            tag = TAG,
+                            message = "WebSocket parse error",
+                            level = LogLevel.ERROR,
+                            throwable = e
+                        )
                     }
                 }
 
+                // Triggered on network/server failure
                 override fun onFailure(
                     webSocket: WebSocket,
                     t: Throwable,
                     response: Response?
                 ) {
-                    Log.e("Socket", "WebSocket failure: ${t.message}")
-                    close(t) // 👈 THIS triggers retry
+                    errorLogger.log(
+                        tag = TAG,
+                        message = "WebSocket failure",
+                        level = LogLevel.CRITICAL,
+                        throwable = t
+                    )
+                    close(t)
                 }
 
+                // Triggered when socket closes normally
                 override fun onClosed(
                     webSocket: WebSocket,
                     code: Int,
                     reason: String
                 ) {
-                    Log.d("Socket", "WebSocket closed")
-                    close() // 👈 THIS triggers retry
+                    errorLogger.log(
+                        tag = TAG,
+                        message = "WebSocket closed. Code: $code, Reason: $reason",
+                        level = LogLevel.WARNING
+                    )
+                    close()
                 }
             }
 
             val socket = client.newWebSocket(request, listener)
 
+            // Ensures socket closes when flow is cancelled
             awaitClose {
-                Log.d("Socket", "Closing WebSocket")
+                errorLogger.log(
+                    tag = TAG,
+                    message = "Closing WebSocket",
+                    level = LogLevel.DEBUG
+                )
                 socket.close(1000, null)
             }
         }
+            // Retries connection after delay when failure occurs
             .retryWhen { cause, attempt ->
-                Log.d("Socket", "Retrying in 3 seconds... Attempt: $attempt")
+
+                errorLogger.log(
+                    tag = TAG,
+                    message = "Retrying WebSocket. Attempt: $attempt",
+                    level = LogLevel.WARNING,
+                    throwable = cause
+                )
+
                 delay(3000)
                 true
             }

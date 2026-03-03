@@ -13,14 +13,30 @@ import javax.inject.Inject
 import com.gurmeet.coindevta.data.remote.websocket.BinanceSocketManager
 import com.gurmeet.coindevta.domain.model.TickerUpdate
 import com.gurmeet.coindevta.domain.usecase.ObserveCoinsUseCase
+import com.gurmeet.coindevta.logger.ErrorLogger
+import com.gurmeet.coindevta.logger.LogLevel
 import kotlin.math.absoluteValue
-import androidx.core.graphics.toColorInt
 
+/**
+ * Foreground service responsible for showing
+ * real-time notification updates of the currently pinned coin.
+ *
+ * It listens to database changes for pinned coin,
+ * restarts WebSocket stream accordingly,
+ * and updates notification with live prices.
+ */
 @AndroidEntryPoint
 class PinnedPriceService : Service() {
 
     @Inject lateinit var socketManager: BinanceSocketManager
     @Inject lateinit var observeCoinsUseCase: ObserveCoinsUseCase
+    @Inject lateinit var errorLogger: ErrorLogger
+
+    companion object {
+        private const val TAG = "PinnedPriceService"
+        private const val CHANNEL_ID = "pinned_coin_channel"
+        private const val NOTIFICATION_ID = 1001
+    }
 
     private val serviceScope =
         CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -28,18 +44,20 @@ class PinnedPriceService : Service() {
     private var socketJob: Job? = null
     private var currentPinned: String? = null
 
-    companion object {
-        private const val CHANNEL_ID = "pinned_coin_channel"
-        private const val NOTIFICATION_ID = 1001
-    }
-
+    /**
+     * Called when service is created.
+     * Initializes notification channel and starts observing pinned coin.
+     */
     override fun onCreate() {
         super.onCreate()
+
         createChannel()
+
         startForeground(
             NOTIFICATION_ID,
             baseNotification("Waiting for pinned coin...")
         )
+
         observePinnedCoin()
     }
 
@@ -47,74 +65,105 @@ class PinnedPriceService : Service() {
         intent: Intent?,
         flags: Int,
         startId: Int
-    ): Int {
-        return START_STICKY
-    }
+    ): Int = START_STICKY
 
     // --------------------------------------------------
     // Observe pinned coin
     // --------------------------------------------------
 
+    /**
+     * Observes database for pinned coin changes.
+     * Restarts WebSocket stream when pinned symbol changes.
+     */
     private fun observePinnedCoin() {
 
         serviceScope.launch {
 
-            observeCoinsUseCase()
-                .map { coins ->
-                    coins.firstOrNull { it.isPinned }?.symbol
-                }
-                .distinctUntilChanged()
-                .collect { newPinned ->
-
-                    if (newPinned == null) {
-                        stopSocket()
-                        stopSelf()
-                        return@collect
+            try {
+                observeCoinsUseCase()
+                    .map { coins ->
+                        coins.firstOrNull { it.isPinned }?.symbol
                     }
+                    .distinctUntilChanged()
+                    .collect { newPinned ->
 
-                    if (newPinned != currentPinned) {
-                        currentPinned = newPinned
-                        restartSocket(newPinned)
+                        if (newPinned == null) {
+                            stopSocket()
+                            stopSelf()
+                            return@collect
+                        }
+
+                        if (newPinned != currentPinned) {
+                            currentPinned = newPinned
+                            restartSocket(newPinned)
+                        }
                     }
-                }
+            } catch (e: Exception) {
+                errorLogger.log(
+                    TAG,
+                    "Error observing pinned coin",
+                    LogLevel.ERROR,
+                    e
+                )
+            }
         }
     }
 
     // --------------------------------------------------
-    // Socket
+    // WebSocket handling
     // --------------------------------------------------
 
+    /**
+     * Restarts WebSocket collection for the specified symbol.
+     *
+     * @param symbol The currently pinned coin symbol.
+     */
     private fun restartSocket(symbol: String) {
 
         stopSocket()
 
         socketJob = serviceScope.launch {
 
-            socketManager.observeAllPrices()
-                .collect { update: TickerUpdate ->
+            try {
+                socketManager.observeAllPrices()
+                    .collect { update: TickerUpdate ->
 
-                    if (update.symbol.equals(symbol, true)) {
+                        if (update.symbol.equals(symbol, true)) {
 
-                        updateNotification(
-                            symbol = symbol,
-                            price = update.currentPrice,
-                            openPrice = update.openPrice24h,
-                            isPositive = update.isPositive24h
-                        )
+                            updateNotification(
+                                symbol = symbol,
+                                price = update.currentPrice,
+                                openPrice = update.openPrice24h,
+                                isPositive = update.isPositive24h
+                            )
+                        }
                     }
-                }
+            } catch (e: Exception) {
+                errorLogger.log(
+                    TAG,
+                    "WebSocket collection failed",
+                    LogLevel.ERROR,
+                    e
+                )
+            }
         }
     }
 
+    /**
+     * Stops current WebSocket job safely.
+     */
     private fun stopSocket() {
         socketJob?.cancel()
         socketJob = null
     }
 
     // --------------------------------------------------
-    // Notification UI
+    // Notification
     // --------------------------------------------------
 
+    /**
+     * Creates notification channel for pinned coin updates.
+     */
     private fun createChannel() {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -134,6 +183,9 @@ class PinnedPriceService : Service() {
         }
     }
 
+    /**
+     * Base notification shown before price updates start.
+     */
     private fun baseNotification(text: String): Notification {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
@@ -145,6 +197,14 @@ class PinnedPriceService : Service() {
             .build()
     }
 
+    /**
+     * Updates foreground notification with live price data.
+     *
+     * @param symbol Coin symbol
+     * @param price Current live price
+     * @param openPrice 24h open price
+     * @param isPositive Whether price is positive compared to 24h open
+     */
     private fun updateNotification(
         symbol: String,
         price: Double,
@@ -195,6 +255,10 @@ class PinnedPriceService : Service() {
         getSystemService(NotificationManager::class.java)
             .notify(NOTIFICATION_ID, notification)
     }
+
+    /**
+     * Cleans up coroutine scope when service is destroyed.
+     */
     override fun onDestroy() {
         serviceScope.cancel()
         super.onDestroy()

@@ -13,16 +13,35 @@ import kotlinx.coroutines.flow.*
 import javax.inject.Inject
 import com.gurmeet.coindevta.data.remote.websocket.BinanceSocketManager
 import com.gurmeet.coindevta.domain.model.TickerUpdate
+import com.gurmeet.coindevta.logger.ErrorLogger
+import com.gurmeet.coindevta.logger.LogLevel
 import org.json.JSONObject
 
+/**
+ * Foreground service responsible for:
+ * - Listening to WebSocket live prices
+ * - Filtering favorite coins
+ * - Updating Glance widget state safely
+ * - Monitoring connection health
+ */
 @AndroidEntryPoint
 class CoinWidgetService : Service() {
 
     @Inject lateinit var socketManager: BinanceSocketManager
+    @Inject lateinit var errorLogger: ErrorLogger
+
+    companion object {
+        private const val TAG = "CoinWidgetService"
+        private const val CHANNEL_ID = "coin_widget_channel"
+        private const val NOTIFICATION_ID = 1
+    }
 
     private val serviceScope =
         CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /**
+     * Represents UI-safe widget price model.
+     */
     data class WidgetPrice(
         val price: String,
         val positive: Boolean
@@ -39,9 +58,16 @@ class CoinWidgetService : Service() {
     private var lastPushedPricesJson: String = ""
     private var lastConnection: Boolean = false
 
+    /**
+     * Initializes foreground service and starts observers.
+     */
     override fun onCreate() {
         super.onCreate()
-        startForeground(1, createNotification())
+
+        startForeground(
+            NOTIFICATION_ID,
+            createNotification()
+        )
 
         observeFavorites()
         observeSocket()
@@ -52,77 +78,103 @@ class CoinWidgetService : Service() {
         intent: Intent?,
         flags: Int,
         startId: Int
-    ): Int {
-        return START_STICKY
-    }
-    // --------------------------------------------------
-    // FAVORITES OBSERVER
-    // --------------------------------------------------
+    ): Int = START_STICKY
 
+    /**
+     * Observes DataStore for favorite coins changes.
+     * Filters cached prices when favorites change.
+     */
     private fun observeFavorites() {
         serviceScope.launch {
+            try {
+                widgetDataStore.data
+                    .map { it[WidgetKeys.FAVORITES] ?: emptySet() }
+                    .distinctUntilChanged()
+                    .collect { newFavorites ->
 
-            widgetDataStore.data
-                .map { it[WidgetKeys.FAVORITES] ?: emptySet() }
-                .distinctUntilChanged()
-                .collect { newFavorites ->
+                        favoriteCache =
+                            newFavorites.map { it.uppercase() }.toSet()
 
-                    favoriteCache =
-                        newFavorites.map { it.uppercase() }.toSet()
+                        priceState.update { current ->
+                            current.filterKeys {
+                                favoriteCache.contains(it)
+                            }
+                        }
 
-                    priceState.update { current ->
-                        current.filterKeys { favoriteCache.contains(it) }
+                        lastPushedPricesJson = ""
                     }
-
-                    lastPushedPricesJson = ""
-                }
+            } catch (e: Exception) {
+                errorLogger.log(
+                    TAG,
+                    "Error observing favorites",
+                    LogLevel.ERROR,
+                    e
+                )
+            }
         }
     }
 
+    /**
+     * Collects live WebSocket updates and maintains connection state.
+     */
     private fun observeSocket() {
 
-        // 1️⃣ SOCKET COLLECTOR
+        // WebSocket collector
         serviceScope.launch {
+            try {
+                socketManager.observeAllPrices()
+                    .onStart {
+                        connectionState.value = false
+                    }
+                    .catch {
+                        connectionState.value = false
 
-            socketManager.observeAllPrices()
-                .onStart {
-                    connectionState.value = false
-                }
-                .catch {
-                    connectionState.value = false
-                }
-                .collect { update: TickerUpdate ->
+                        errorLogger.log(
+                            TAG,
+                            "Socket error in widget service",
+                            LogLevel.ERROR,
+                            it
+                        )
+                    }
+                    .collect { update: TickerUpdate ->
 
-                    connectionState.value = true
+                        connectionState.value = true
 
-                    val symbol =
-                        update.symbol
-                            .substringBefore("@")
-                            .uppercase()
+                        val symbol =
+                            update.symbol
+                                .substringBefore("@")
+                                .uppercase()
 
-                    if (favoriteCache.contains(symbol)) {
+                        if (favoriteCache.contains(symbol)) {
 
-                        priceState.update { old ->
-                            old.toMutableMap().apply {
-                                put(
-                                    symbol,
-                                    WidgetPrice(
-                                        price = "%.4f".format(update.currentPrice),
-                                        positive = update.isPositive24h
+                            priceState.update { old ->
+                                old.toMutableMap().apply {
+                                    put(
+                                        symbol,
+                                        WidgetPrice(
+                                            price = "%.4f".format(update.currentPrice),
+                                            positive = update.isPositive24h
+                                        )
                                     )
-                                )
+                                }
                             }
                         }
                     }
-                }
+            } catch (e: Exception) {
+                errorLogger.log(
+                    TAG,
+                    "WebSocket collection failed",
+                    LogLevel.ERROR,
+                    e
+                )
+            }
         }
 
-        // 2️⃣ HEALTH MONITOR (SEPARATE COROUTINE)
+        // Connection health monitor
         serviceScope.launch {
 
             var lastUpdateTime = System.currentTimeMillis()
 
-            // Track updates
             launch {
                 priceState.collect {
                     lastUpdateTime = System.currentTimeMillis()
@@ -141,10 +193,10 @@ class CoinWidgetService : Service() {
         }
     }
 
-    // --------------------------------------------------
-    // PUSH LOOP (SAFE & STABLE)
-    // --------------------------------------------------
-
+    /**
+     * Pushes price updates to Glance widget every 5 seconds
+     * only when data or connection state changes.
+     */
     private fun pushLoop() {
         serviceScope.launch {
 
@@ -176,33 +228,43 @@ class CoinWidgetService : Service() {
                 lastPushedPricesJson = json
                 lastConnection = connectedSnapshot
 
-                val manager =
-                    GlanceAppWidgetManager(this@CoinWidgetService)
+                try {
+                    val manager =
+                        GlanceAppWidgetManager(this@CoinWidgetService)
 
-                val ids =
-                    manager.getGlanceIds(CoinWidget::class.java)
+                    val ids =
+                        manager.getGlanceIds(CoinWidget::class.java)
 
-                ids.forEach { glanceId ->
+                    ids.forEach { glanceId ->
 
-                    updateAppWidgetState(
-                        context = this@CoinWidgetService,
-                        definition = PreferencesGlanceStateDefinition,
-                        glanceId = glanceId
-                    ) { prefs ->
+                        updateAppWidgetState(
+                            context = this@CoinWidgetService,
+                            definition = PreferencesGlanceStateDefinition,
+                            glanceId = glanceId
+                        ) { prefs ->
 
-                        val mutable =
-                            prefs.toMutablePreferences()
+                            val mutable =
+                                prefs.toMutablePreferences()
 
-                        mutable[CoinWidget.PricesKey] = json
-                        mutable[CoinWidget.ConnectionKey] =
-                            connectedSnapshot
+                            mutable[CoinWidget.PricesKey] = json
+                            mutable[CoinWidget.ConnectionKey] =
+                                connectedSnapshot
 
-                        mutable
+                            mutable
+                        }
+
+                        CoinWidget().update(
+                            this@CoinWidgetService,
+                            glanceId
+                        )
                     }
 
-                    CoinWidget().update(
-                        this@CoinWidgetService,
-                        glanceId
+                } catch (e: Exception) {
+                    errorLogger.log(
+                        TAG,
+                        "Failed to push widget update",
+                        LogLevel.ERROR,
+                        e
                     )
                 }
             }
@@ -213,14 +275,15 @@ class CoinWidgetService : Service() {
     // FOREGROUND NOTIFICATION
     // --------------------------------------------------
 
+    /**
+     * Creates foreground notification required for background execution.
+     */
     private fun createNotification(): Notification {
-
-        val channelId = "coin_widget_channel"
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
 
             val channel = NotificationChannel(
-                channelId,
+                CHANNEL_ID,
                 "Coin Widget",
                 NotificationManager.IMPORTANCE_MIN
             )
@@ -229,7 +292,7 @@ class CoinWidgetService : Service() {
                 .createNotificationChannel(channel)
         }
 
-        return NotificationCompat.Builder(this, channelId)
+        return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Live Coin Prices")
             .setContentText("Updating every 5-6 seconds")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
@@ -240,6 +303,9 @@ class CoinWidgetService : Service() {
             .build()
     }
 
+    /**
+     * Cancels coroutine scope when service is destroyed.
+     */
     override fun onDestroy() {
         serviceScope.cancel()
         super.onDestroy()
