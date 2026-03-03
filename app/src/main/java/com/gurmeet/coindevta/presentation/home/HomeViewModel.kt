@@ -56,9 +56,11 @@ class HomeViewModel @Inject constructor(
      * - Database coin list
      * - Search query
      * - Sorting type
+     * - UI flags (loading, bottom sheet, etc.)
      */
     val state: StateFlow<HomeScreenState> =
-        combine(baseCoinsFlow, searchQuery, sortType) { coins, query, sort ->
+        combine(baseCoinsFlow, searchQuery, sortType, uiFlags)
+        { coins, query, sort, flags ->
 
             val filtered =
                 if (query.isBlank()) coins
@@ -75,16 +77,10 @@ class HomeViewModel @Inject constructor(
                 SortType.NAME_DESC -> filtered.sortedByDescending { it.name }
             }
 
-            HomeScreenState(
+            flags.copy(
                 coins = sorted,
                 searchQuery = query,
-                selectedSort = sort,
-                isLoading = uiFlags.value.isLoading,
-                error = uiFlags.value.error,
-                isBottomSheetOpen = uiFlags.value.isBottomSheetOpen,
-                isExpandedFavorites = uiFlags.value.isExpandedFavorites,
-                isFoldableExpanded = uiFlags.value.isFoldableExpanded,
-                tickerMap = uiFlags.value.tickerMap
+                selectedSort = sort
             )
         }.stateIn(
             viewModelScope,
