@@ -157,7 +157,7 @@ class HomeScreenUi {
                                     }
 
                                     Text(
-                                        "$ ${String.format("%.2f", price)}",
+                                        "$ ${String.format("%.4f", price)}",
                                         color = priceColor,
                                         fontWeight = FontWeight.Medium
                                     )
@@ -563,7 +563,7 @@ class HomeScreenUi {
                 Column(horizontalAlignment = Alignment.End) {
 
                     Text(
-                        text = "$ ${String.format("%.2f", displayPrice)}",
+                        text = "$ ${String.format("%.4f", displayPrice)}",
                         style = MaterialTheme.typography.bodyMedium.copy(
                             fontWeight = FontWeight.Medium
                         ),
@@ -725,7 +725,7 @@ class HomeScreenUi {
                         }
 
                         Text(
-                            "$ ${String.format("%.2f", price)}",
+                            "$ ${String.format("%.4f", price)}",
                             color = priceColor
                         )
                     }
@@ -831,7 +831,7 @@ class HomeScreenUi {
 
                                 Column(horizontalAlignment = Alignment.End) {
                                     Text(
-                                        "$ ${String.format("%.2f", price)}",
+                                        "$ ${String.format("%.4f", price)}",
                                         color = priceColor,
                                         fontWeight = FontWeight.Medium
                                     )
@@ -899,7 +899,7 @@ class HomeScreenUi {
                         ) {
 
                             Text(
-                                "$ ${String.format("%.2f", price)}",
+                                "$ ${String.format("%.4f", price)}",
                                 color = priceColor,
                                 fontWeight = FontWeight.Medium
                             )

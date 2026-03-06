@@ -280,7 +280,7 @@ class PinnedPriceService : Service() {
 
         val formattedPrice = "%.4f".format(price)
         val formattedPercent =
-            "%.2f".format(changePercent.absoluteValue)
+            "%.4f".format(changePercent.absoluteValue)
 
         val arrow = if (isPositive) "▲" else "▼"
 

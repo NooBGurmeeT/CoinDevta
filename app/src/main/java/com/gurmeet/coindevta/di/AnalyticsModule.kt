@@ -1,5 +1,7 @@
-package com.gurmeet.coindevta.analytics
+package com.gurmeet.coindevta.di
 
+import com.gurmeet.coindevta.analytics.AnalyticsLogger
+import com.gurmeet.coindevta.analytics.AppAnalyticsLogger
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn

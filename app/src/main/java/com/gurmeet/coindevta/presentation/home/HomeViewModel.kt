@@ -153,7 +153,6 @@ class HomeViewModel @Inject constructor(
      * batches them every 1 second,
      * and updates only the latest value per symbol.
      */
-    @OptIn(FlowPreview::class)
     private fun observeLivePrices() {
 
         viewModelScope.launch(Dispatchers.IO) {
